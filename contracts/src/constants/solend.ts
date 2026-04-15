@@ -1,0 +1,14 @@
+export const SOLEND = {
+  PROGRAM_ID: "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo",
+  LOOKUP_TABLE_ADDRESSES: ["89ig7Cu6Roi9mJMqpY8sBkPYL2cnqzpgP16sJxSUbvct"],
+  MAIN_MARKET: {
+    LENDING_MARKET: "4UpD2fh7xH3VP9QQaXtsS1YY3bxzWhtfpks7FatyKvdY",
+    USDC: {
+      COUNTERPARTY_TA: "8SheGtsopRUDzdiD6v6BR9a6bqZ9QwywYQY99Fp5meNf",
+      RESERVE: "BgxfHJDzm44T7XG68MYKx7YisTjZu73tVovyZSjJMpmw",
+      COLLATERAL_MINT: "993dVFL2uXWYeoXuEBFXR4BijeXdTv4s6BzsCjJZuwqk",
+      PYTH_ORACLE: "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+      SWITCHBOARD_ORACLE: "BjUgj6YCnFBZ49wF54ddBVA9qu8TeqkFtkbqmZcee8uW",
+    },
+  },
+};
