@@ -316,6 +316,50 @@ def append_rate_history(rates: Dict[str, float]):
         json.dump(history, f)
 
 
+_lstm_bundle = None
+
+
+def get_lstm_bundle():
+    global _lstm_bundle
+    if _lstm_bundle is not None:
+        return _lstm_bundle
+    try:
+        from models.forecaster import load_model
+        _lstm_bundle = load_model()
+        if _lstm_bundle:
+            print("[predict] LSTM model loaded", file=sys.stderr)
+    except Exception as e:
+        print(f"[predict] LSTM load failed, using regime-only: {e}", file=sys.stderr)
+        _lstm_bundle = None
+    return _lstm_bundle
+
+
+def lstm_adjusted_rates(rates: Dict[str, float], tvl: Dict[str, float]) -> Optional[Dict[str, float]]:
+    bundle = get_lstm_bundle()
+    if bundle is None:
+        return None
+    try:
+        from models.forecaster import predict_rates, PROTOCOLS as LSTM_PROTOCOLS, FEATURES_PER_PROTOCOL, SEQUENCE_LEN
+        row = []
+        for p in LSTM_PROTOCOLS:
+            row.append(rates.get(p, 0))
+            row.append(rates.get(p, 0))
+            row.append(0.0)
+            row.append(np.log1p(tvl.get(p, 100_000_000)))
+        recent = np.array([row] * SEQUENCE_LEN, dtype=np.float32)
+        pred_scaled = predict_rates(bundle, recent)
+        scaler = bundle["scaler"]
+        pred_apys = {}
+        for i, p in enumerate(LSTM_PROTOCOLS):
+            col_idx = i * FEATURES_PER_PROTOCOL
+            pred_val = pred_scaled[i] * scaler.std[col_idx] + scaler.mean[col_idx]
+            pred_apys[p] = float(np.clip(pred_val, 0, 1))
+        return pred_apys
+    except Exception as e:
+        print(f"[predict] LSTM inference failed: {e}", file=sys.stderr)
+        return None
+
+
 def run_inference(input_data: Optional[Dict] = None) -> Dict:
     if input_data is None:
         from data.fetcher import fetch_all_rates
@@ -338,8 +382,21 @@ def run_inference(input_data: Optional[Dict] = None) -> Dict:
 
     append_rate_history(rates)
 
-    regime, regime_confidence = detect_regime(rates)
-    weights = optimize_allocation(rates, utilization, tvl, regime)
+    model_version = "v1.0-regime-optimizer"
+    predicted_rates = lstm_adjusted_rates(rates, tvl)
+    if predicted_rates:
+        blend = {}
+        for p in PROTOCOLS:
+            current = rates.get(p, 0)
+            predicted = predicted_rates.get(p, current)
+            blend[p] = 0.6 * current + 0.4 * predicted
+        effective_rates = blend
+        model_version = "v2.0-lstm-regime-hybrid"
+    else:
+        effective_rates = rates
+
+    regime, regime_confidence = detect_regime(effective_rates)
+    weights = optimize_allocation(effective_rates, utilization, tvl, regime)
     risk_metrics = compute_risk_metrics(weights, rates)
     urgency = compute_rebalance_urgency(weights, rates, regime)
     feature_importance = compute_feature_importance(rates, utilization, tvl, weights)
@@ -349,6 +406,8 @@ def run_inference(input_data: Optional[Dict] = None) -> Dict:
         0.95 if risk_metrics["portfolio_var_95"] < 0.005 else 0.7,
         0.90 if risk_metrics["hhi"] < 3000 else 0.6,
     )
+    if predicted_rates:
+        overall_confidence = min(overall_confidence + 0.05, 0.98)
 
     now = datetime.now(timezone.utc)
 
@@ -363,9 +422,12 @@ def run_inference(input_data: Optional[Dict] = None) -> Dict:
         "rebalance_urgency": urgency,
         "rate_observations": {p: round(r, 6) for p, r in rates.items()},
         "expires_at": (now + timedelta(minutes=5)).isoformat(),
-        "model_version": "v1.0-regime-optimizer",
+        "model_version": model_version,
         "feature_importance": feature_importance,
     }
+
+    if predicted_rates:
+        signal["predicted_rates"] = {p: round(r, 6) for p, r in predicted_rates.items()}
 
     return signal
 
