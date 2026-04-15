@@ -10,6 +10,7 @@ import { RiskMetricsPanel } from "@/components/dashboard/risk-metrics";
 import { PnlChart } from "@/components/dashboard/pnl-chart";
 import { DepositWithdraw } from "@/components/dashboard/deposit-withdraw";
 import { StrategyThesis } from "@/components/dashboard/strategy-thesis";
+import { MonteCarloStats } from "@/components/dashboard/monte-carlo-stats";
 import { useEffect, useState, useCallback } from "react";
 import type {
   ApyDataPoint,
@@ -34,6 +35,12 @@ function useDashboardData() {
   const [rebalances, setRebalances] = useState<RebalanceEvent[]>([]);
   const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null);
   const [pnlData, setPnlData] = useState<PnlDataPoint[]>([]);
+  const [monteCarloSummary, setMonteCarloSummary] = useState<{
+    meanApy: number;
+    p5Apy: number;
+    p95Apy: number;
+    meanSharpe: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<string>("live");
@@ -51,6 +58,7 @@ function useDashboardData() {
       setRebalances(data.rebalances || []);
       setRiskMetrics(data.riskMetrics || null);
       setPnlData(data.pnlHistory || []);
+      setMonteCarloSummary(data.monteCarloSummary || null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch vault data");
@@ -72,6 +80,7 @@ function useDashboardData() {
     rebalances,
     riskMetrics,
     pnlData,
+    monteCarloSummary,
     loading,
     error,
     dataSource,
@@ -101,6 +110,7 @@ function DashboardContent() {
     rebalances,
     riskMetrics,
     pnlData,
+    monteCarloSummary,
     loading,
     error,
     dataSource,
@@ -142,6 +152,10 @@ function DashboardContent() {
           lastRebalance={overview?.lastRebalance ?? ""}
         />
       </section>
+
+      {monteCarloSummary && (
+        <MonteCarloStats data={monteCarloSummary} />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
