@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "keeper:build": "tsc -p src/keeper/tsconfig.keeper.json",
+    "keeper:start": "node dist/keeper/src/keeper/main.js",
+    "keeper:dev": "npx tsx src/keeper/main.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -23,6 +26,7 @@
     "bs58": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
     "lucide-react": "^1.8.0",
     "next": "16.2.3",
     "node-cron": "^4.2.1",
@@ -42,6 +46,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
