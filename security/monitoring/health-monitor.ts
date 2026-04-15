@@ -7,7 +7,7 @@ export interface HealthStatus {
   vaultTvl: number;
   timestamp: number;
   alerts: Alert[];
-  circuitBreakerState: string;
+  circuitBreakerStatus: ReturnType<CircuitBreaker["getStatus"]>;
 }
 
 export interface Alert {
@@ -64,14 +64,16 @@ export class HealthMonitor {
   }
 
   async runHealthCheck(): Promise<HealthStatus> {
+    const cbStatus = this.circuitBreaker.getStatus();
+
     if (!this.healthCheckFn) {
       return {
-        healthy: true,
+        healthy: !cbStatus.isPaused,
         healthFactor: this.lastHealthFactor,
         vaultTvl: this.lastTvl,
         timestamp: Date.now(),
         alerts: [],
-        circuitBreakerState: this.circuitBreaker.getState(),
+        circuitBreakerStatus: cbStatus,
       };
     }
 
@@ -80,58 +82,44 @@ export class HealthMonitor {
       this.lastHealthFactor = healthFactor;
       this.lastTvl = tvl;
 
-      this.circuitBreaker.updateHealthFactor(healthFactor);
-
       const newAlerts: Alert[] = [];
 
       if (healthFactor <= 1.05) {
-        const alert = this.createAlert(
+        newAlerts.push(this.createAlert(
           "critical",
           `CRITICAL: Health factor ${healthFactor.toFixed(4)} near liquidation`,
           "health-monitor"
-        );
-        newAlerts.push(alert);
+        ));
       } else if (healthFactor <= 1.2) {
-        const alert = this.createAlert(
+        newAlerts.push(this.createAlert(
           "warning",
           `Health factor ${healthFactor.toFixed(4)} below safe threshold`,
           "health-monitor"
-        );
-        newAlerts.push(alert);
+        ));
       }
 
-      if (this.circuitBreaker.isEmergencyPaused()) {
-        const alert = this.createAlert(
+      if (cbStatus.isPaused) {
+        newAlerts.push(this.createAlert(
           "critical",
-          "Circuit breaker in EMERGENCY PAUSE",
+          `Circuit breaker paused: ${cbStatus.pauseReason}`,
           "circuit-breaker"
-        );
-        newAlerts.push(alert);
-      } else if (this.circuitBreaker.getState() === "OPEN") {
-        const alert = this.createAlert(
-          "warning",
-          `Circuit breaker OPEN: ${this.circuitBreaker.getTripReason()}`,
-          "circuit-breaker"
-        );
-        newAlerts.push(alert);
+        ));
       }
 
       for (const alert of newAlerts) {
         this.alerts.push(alert);
         for (const cb of this.alertCallbacks) {
-          try {
-            cb(alert);
-          } catch {}
+          try { cb(alert); } catch {}
         }
       }
 
       return {
-        healthy: healthFactor > 1.2 && this.circuitBreaker.isOperational(),
+        healthy: healthFactor > 1.2 && !cbStatus.isPaused,
         healthFactor,
         vaultTvl: tvl,
         timestamp: Date.now(),
         alerts: newAlerts,
-        circuitBreakerState: this.circuitBreaker.getState(),
+        circuitBreakerStatus: cbStatus,
       };
     } catch (error) {
       const alert = this.createAlert(
@@ -141,9 +129,7 @@ export class HealthMonitor {
       );
       this.alerts.push(alert);
       for (const cb of this.alertCallbacks) {
-        try {
-          cb(alert);
-        } catch {}
+        try { cb(alert); } catch {}
       }
 
       return {
@@ -152,7 +138,7 @@ export class HealthMonitor {
         vaultTvl: this.lastTvl,
         timestamp: Date.now(),
         alerts: [alert],
-        circuitBreakerState: this.circuitBreaker.getState(),
+        circuitBreakerStatus: cbStatus,
       };
     }
   }
@@ -163,13 +149,12 @@ export class HealthMonitor {
 
   getStatus(): HealthStatus {
     return {
-      healthy:
-        this.lastHealthFactor > 1.2 && this.circuitBreaker.isOperational(),
+      healthy: this.lastHealthFactor > 1.2 && !this.circuitBreaker.getStatus().isPaused,
       healthFactor: this.lastHealthFactor,
       vaultTvl: this.lastTvl,
       timestamp: Date.now(),
       alerts: this.alerts.slice(-5),
-      circuitBreakerState: this.circuitBreaker.getState(),
+      circuitBreakerStatus: this.circuitBreaker.getStatus(),
     };
   }
 

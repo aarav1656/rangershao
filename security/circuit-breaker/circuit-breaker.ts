@@ -1,185 +1,311 @@
-export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
+import { SecurityConfig } from '../config/security-config';
 
-export interface CircuitBreakerConfig {
-  maxFailures: number;
-  cooldownMs: number;
-  halfOpenMaxAttempts: number;
-  maxTransactionsPerMinute: number;
-  maxTransactionsPerHour: number;
-  healthFactorMinimum: number;
-  healthFactorEmergency: number;
+export interface TransactionCheckParams {
+  amountUsd: number;
+  healthFactor: number;
+  isRebalance: boolean;
 }
 
-interface TransactionRecord {
+export interface TransactionCheckResult {
+  allowed: boolean;
+  reason?: string;
+  warnings: string[];
+}
+
+export interface CircuitBreakerStatus {
+  isPaused: boolean;
+  pauseReason: string | null;
+  tripCount: number;
+  txLastMinute: number;
+  txLastHour: number;
+  dailyVolumeUsd: number;
+  rebalancesToday: number;
+  lastRebalanceTime: number;
+  cooldownActive: boolean;
+  cooldownRemainingMs: number;
+}
+
+interface TransactionLogEntry {
   timestamp: number;
-  success: boolean;
-  error?: string;
+  amountUsd: number;
 }
 
 export class CircuitBreaker {
-  private state: CircuitState = "CLOSED";
-  private tripReason: string = "";
-  private lastTripTime: number = 0;
-  private consecutiveFailures: number = 0;
-  private halfOpenAttempts: number = 0;
-  private config: CircuitBreakerConfig;
-  private txHistory: TransactionRecord[] = [];
-  private emergencyPause: boolean = false;
-  private currentHealthFactor: number = Infinity;
-  private listeners: Array<(state: CircuitState, reason: string) => void> = [];
+  private config: SecurityConfig;
+  private transactionLog: TransactionLogEntry[] = [];
+  private lastRebalanceTime: number = 0;
+  private rebalancesToday: number = 0;
+  private dailyResetDate: string = this.getTodayDate();
+  private isPaused: boolean = false;
+  private pauseReason: string | null = null;
+  private lastTripTime: number | null = null;
+  private tripCount: number = 0;
 
-  constructor(config: CircuitBreakerConfig) {
+  constructor(config: SecurityConfig) {
     this.config = config;
   }
 
-  isOperational(): boolean {
-    if (this.emergencyPause) return false;
+  /**
+   * Check if a transaction is allowed based on circuit breaker rules.
+   */
+  checkCanExecute(params: TransactionCheckParams): TransactionCheckResult {
+    this.resetDailyCounters();
+    this.pruneOldTransactions();
 
-    if (this.state === "OPEN") {
-      if (Date.now() - this.lastTripTime > this.config.cooldownMs) {
-        this.state = "HALF_OPEN";
-        this.halfOpenAttempts = 0;
-        this.notify("HALF_OPEN", "Cooldown expired, entering half-open");
-        return true;
+    const warnings: string[] = [];
+
+    // Check 1: Emergency pause active
+    if (this.isPaused) {
+      return {
+        allowed: false,
+        reason: `Circuit breaker paused: ${this.pauseReason}`,
+        warnings,
+      };
+    }
+
+    // Check 2: Cooldown active after trip
+    const cooldownRemaining = this.getCooldownRemaining();
+    if (cooldownRemaining > 0) {
+      return {
+        allowed: false,
+        reason: `Cooldown active. Remaining: ${cooldownRemaining}ms`,
+        warnings,
+      };
+    }
+
+    // Check 3: Health factor emergency threshold
+    if (params.healthFactor < this.config.circuitBreaker.healthFactorEmergency) {
+      this.emergencyPause(
+        `Health factor critical: ${params.healthFactor.toFixed(2)} < ${this.config.circuitBreaker.healthFactorEmergency}`
+      );
+      return {
+        allowed: false,
+        reason: `Health factor critical threshold breached`,
+        warnings,
+      };
+    }
+
+    // Check 4: Health factor minimum threshold
+    if (params.healthFactor < this.config.circuitBreaker.healthFactorMinimum) {
+      warnings.push(
+        `Health factor warning: ${params.healthFactor.toFixed(2)} < ${this.config.circuitBreaker.healthFactorMinimum}`
+      );
+      // Block rebalances but allow emergency withdrawals
+      if (params.isRebalance) {
+        return {
+          allowed: false,
+          reason: `Rebalance blocked due to low health factor`,
+          warnings,
+        };
       }
-      return false;
     }
 
-    return true;
-  }
-
-  recordAttempt(): void {
-    const now = Date.now();
-    this.pruneOldRecords(now);
-
-    const txLastMinute = this.txHistory.filter(
-      (t) => now - t.timestamp < 60_000
-    ).length;
-    if (txLastMinute >= this.config.maxTransactionsPerMinute) {
-      this.trip(`Rate limit: ${txLastMinute} tx/min exceeds ${this.config.maxTransactionsPerMinute}`);
+    // Check 5: Single transaction limit
+    if (params.amountUsd > this.config.circuitBreaker.maxSingleTransactionUsd) {
+      return {
+        allowed: false,
+        reason: `Transaction size exceeds limit: $${params.amountUsd.toFixed(2)} > $${this.config.circuitBreaker.maxSingleTransactionUsd.toFixed(2)}`,
+        warnings,
+      };
     }
 
-    const txLastHour = this.txHistory.filter(
-      (t) => now - t.timestamp < 3600_000
-    ).length;
-    if (txLastHour >= this.config.maxTransactionsPerHour) {
-      this.trip(`Rate limit: ${txLastHour} tx/hour exceeds ${this.config.maxTransactionsPerHour}`);
+    // Check 6: Transactions in last minute
+    const txLastMinute = this.getTransactionsInLastMinute();
+    if (txLastMinute >= this.config.circuitBreaker.maxTransactionsPerMinute) {
+      return {
+        allowed: false,
+        reason: `Max transactions per minute exceeded: ${txLastMinute} >= ${this.config.circuitBreaker.maxTransactionsPerMinute}`,
+        warnings,
+      };
     }
-  }
 
-  recordSuccess(): void {
-    this.txHistory.push({ timestamp: Date.now(), success: true });
-    this.consecutiveFailures = 0;
+    // Check 7: Transactions in last hour
+    const txLastHour = this.getTransactionsInLastHour();
+    if (txLastHour >= this.config.circuitBreaker.maxTransactionsPerHour) {
+      return {
+        allowed: false,
+        reason: `Max transactions per hour exceeded: ${txLastHour} >= ${this.config.circuitBreaker.maxTransactionsPerHour}`,
+        warnings,
+      };
+    }
 
-    if (this.state === "HALF_OPEN") {
-      this.halfOpenAttempts++;
-      if (this.halfOpenAttempts >= this.config.halfOpenMaxAttempts) {
-        this.state = "CLOSED";
-        this.notify("CLOSED", "Half-open test passed, circuit closed");
+    // Check 8: Daily volume limit
+    const dailyVolume = this.getDailyVolume();
+    if (
+      dailyVolume + params.amountUsd >
+      this.config.circuitBreaker.maxDailyVolumeUsd
+    ) {
+      return {
+        allowed: false,
+        reason: `Daily volume would exceed limit: $${(dailyVolume + params.amountUsd).toFixed(2)} > $${this.config.circuitBreaker.maxDailyVolumeUsd.toFixed(2)}`,
+        warnings,
+      };
+    }
+
+    // Check 9: Rebalance-specific checks
+    if (params.isRebalance) {
+      const timeSinceLastRebalance = Date.now() - this.lastRebalanceTime;
+      if (
+        timeSinceLastRebalance <
+        this.config.rateLimit.rebalanceMinIntervalMs
+      ) {
+        return {
+          allowed: false,
+          reason: `Rebalance cooldown active: ${timeSinceLastRebalance}ms < ${this.config.rateLimit.rebalanceMinIntervalMs}ms`,
+          warnings,
+        };
+      }
+
+      if (
+        this.rebalancesToday >=
+        this.config.rateLimit.maxRebalancesPerDay
+      ) {
+        return {
+          allowed: false,
+          reason: `Max rebalances per day exceeded: ${this.rebalancesToday} >= ${this.config.rateLimit.maxRebalancesPerDay}`,
+          warnings,
+        };
       }
     }
-  }
 
-  recordFailure(error: string): void {
-    this.txHistory.push({ timestamp: Date.now(), success: false, error });
-    this.consecutiveFailures++;
-
-    if (this.state === "HALF_OPEN") {
-      this.trip(`Failed during half-open test: ${error}`);
-      return;
-    }
-
-    if (this.consecutiveFailures >= this.config.maxFailures) {
-      this.trip(`${this.consecutiveFailures} consecutive failures. Last: ${error}`);
-    }
-  }
-
-  updateHealthFactor(healthFactor: number): void {
-    this.currentHealthFactor = healthFactor;
-
-    if (healthFactor <= this.config.healthFactorEmergency) {
-      this.emergencyPause = true;
-      this.trip(`EMERGENCY: Health factor ${healthFactor} below emergency threshold ${this.config.healthFactorEmergency}`);
-    } else if (healthFactor <= this.config.healthFactorMinimum) {
-      this.trip(`Health factor ${healthFactor} below minimum ${this.config.healthFactorMinimum}`);
-    }
-  }
-
-  emergencyStop(reason: string): void {
-    this.emergencyPause = true;
-    this.trip(`EMERGENCY STOP: ${reason}`);
-  }
-
-  resetEmergency(): void {
-    this.emergencyPause = false;
-    this.state = "HALF_OPEN";
-    this.halfOpenAttempts = 0;
-    this.notify("HALF_OPEN", "Emergency cleared, entering half-open");
-  }
-
-  getState(): CircuitState {
-    return this.state;
-  }
-
-  getTripReason(): string {
-    return this.tripReason;
-  }
-
-  isEmergencyPaused(): boolean {
-    return this.emergencyPause;
-  }
-
-  getHealthFactor(): number {
-    return this.currentHealthFactor;
-  }
-
-  onStateChange(
-    listener: (state: CircuitState, reason: string) => void
-  ): void {
-    this.listeners.push(listener);
-  }
-
-  getStatus(): {
-    state: CircuitState;
-    emergencyPause: boolean;
-    healthFactor: number;
-    tripReason: string;
-    consecutiveFailures: number;
-    txLastMinute: number;
-    txLastHour: number;
-  } {
-    const now = Date.now();
-    this.pruneOldRecords(now);
     return {
-      state: this.state,
-      emergencyPause: this.emergencyPause,
-      healthFactor: this.currentHealthFactor,
-      tripReason: this.tripReason,
-      consecutiveFailures: this.consecutiveFailures,
-      txLastMinute: this.txHistory.filter((t) => now - t.timestamp < 60_000)
-        .length,
-      txLastHour: this.txHistory.filter((t) => now - t.timestamp < 3600_000)
-        .length,
+      allowed: true,
+      warnings,
     };
   }
 
-  private trip(reason: string): void {
-    this.state = "OPEN";
-    this.tripReason = reason;
-    this.lastTripTime = Date.now();
-    this.notify("OPEN", reason);
-  }
+  /**
+   * Record a transaction in the log.
+   */
+  recordTransaction(amountUsd: number, isRebalance: boolean): void {
+    this.resetDailyCounters();
+    this.transactionLog.push({
+      timestamp: Date.now(),
+      amountUsd,
+    });
 
-  private notify(state: CircuitState, reason: string): void {
-    for (const listener of this.listeners) {
-      try {
-        listener(state, reason);
-      } catch {}
+    if (isRebalance) {
+      this.lastRebalanceTime = Date.now();
+      this.rebalancesToday++;
     }
   }
 
-  private pruneOldRecords(now: number): void {
-    const cutoff = now - 3600_000;
-    this.txHistory = this.txHistory.filter((t) => t.timestamp > cutoff);
+  /**
+   * Emergency pause the circuit breaker.
+   */
+  emergencyPause(reason: string): void {
+    this.isPaused = true;
+    this.pauseReason = reason;
+    this.lastTripTime = Date.now();
+    this.tripCount++;
+  }
+
+  /**
+   * Resume the circuit breaker (only if cooldown expired).
+   */
+  resume(): void {
+    const cooldownRemaining = this.getCooldownRemaining();
+    if (cooldownRemaining > 0) {
+      throw new Error(
+        `Cannot resume: cooldown active (${cooldownRemaining}ms remaining)`
+      );
+    }
+
+    this.isPaused = false;
+    this.pauseReason = null;
+  }
+
+  /**
+   * Get the current status of the circuit breaker.
+   */
+  getStatus(): CircuitBreakerStatus {
+    this.resetDailyCounters();
+    this.pruneOldTransactions();
+
+    return {
+      isPaused: this.isPaused,
+      pauseReason: this.pauseReason,
+      tripCount: this.tripCount,
+      txLastMinute: this.getTransactionsInLastMinute(),
+      txLastHour: this.getTransactionsInLastHour(),
+      dailyVolumeUsd: this.getDailyVolume(),
+      rebalancesToday: this.rebalancesToday,
+      lastRebalanceTime: this.lastRebalanceTime,
+      cooldownActive: this.getCooldownRemaining() > 0,
+      cooldownRemainingMs: Math.max(0, this.getCooldownRemaining()),
+    };
+  }
+
+  /**
+   * Get the number of transactions in the last minute.
+   */
+  private getTransactionsInLastMinute(): number {
+    const oneMinuteAgo = Date.now() - 60 * 1000;
+    return this.transactionLog.filter((tx) => tx.timestamp > oneMinuteAgo)
+      .length;
+  }
+
+  /**
+   * Get the number of transactions in the last hour.
+   */
+  private getTransactionsInLastHour(): number {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    return this.transactionLog.filter((tx) => tx.timestamp > oneHourAgo).length;
+  }
+
+  /**
+   * Get the total USD volume for today.
+   */
+  private getDailyVolume(): number {
+    return this.transactionLog.reduce((sum, tx) => sum + tx.amountUsd, 0);
+  }
+
+  /**
+   * Get remaining cooldown time in milliseconds.
+   */
+  private getCooldownRemaining(): number {
+    if (!this.lastTripTime) {
+      return 0;
+    }
+
+    const elapsed = Date.now() - this.lastTripTime;
+    const remaining =
+      this.config.circuitBreaker.cooldownAfterTripMs - elapsed;
+
+    return Math.max(0, remaining);
+  }
+
+  /**
+   * Remove transactions older than 24 hours from the log.
+   */
+  private pruneOldTransactions(): void {
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    this.transactionLog = this.transactionLog.filter(
+      (tx) => tx.timestamp > oneDayAgo
+    );
+  }
+
+  /**
+   * Reset daily counters if the date has changed.
+   */
+  private resetDailyCounters(): void {
+    const today = this.getTodayDate();
+
+    if (today !== this.dailyResetDate) {
+      this.dailyResetDate = today;
+      this.rebalancesToday = 0;
+      this.transactionLog = [];
+    }
+  }
+
+  /**
+   * Get today's date in YYYY-MM-DD format.
+   */
+  private getTodayDate(): string {
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(now.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }

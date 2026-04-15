@@ -1,6 +1,5 @@
 import { CoboMpcClient } from "./cobo-mpc-client";
 import { CircuitBreaker } from "../circuit-breaker/circuit-breaker";
-import { RateLimiter } from "../circuit-breaker/rate-limiter";
 import { SecurityConfig } from "../config/security-config";
 import { randomUUID } from "crypto";
 
@@ -8,14 +7,18 @@ export interface SigningRequest {
   destinationAddress: string;
   tokenId: string;
   amount: string;
+  amountUsd: number;
   memo?: string;
   reason: string;
+  isRebalance: boolean;
+  healthFactor: number;
 }
 
 export interface SigningResult {
   success: boolean;
   transactionId?: string;
   error?: string;
+  warnings?: string[];
   requestId: string;
   timestamp: number;
 }
@@ -23,41 +26,34 @@ export interface SigningResult {
 export class CoboSigningService {
   private coboClient: CoboMpcClient;
   private circuitBreaker: CircuitBreaker;
-  private rateLimiter: RateLimiter;
   private config: SecurityConfig;
   private signingLog: SigningResult[] = [];
 
   constructor(
     config: SecurityConfig,
     coboClient: CoboMpcClient,
-    circuitBreaker: CircuitBreaker,
-    rateLimiter: RateLimiter
+    circuitBreaker: CircuitBreaker
   ) {
     this.config = config;
     this.coboClient = coboClient;
     this.circuitBreaker = circuitBreaker;
-    this.rateLimiter = rateLimiter;
   }
 
   async signAndBroadcast(request: SigningRequest): Promise<SigningResult> {
     const requestId = randomUUID();
     const timestamp = Date.now();
 
-    if (!this.circuitBreaker.isOperational()) {
-      const result: SigningResult = {
-        success: false,
-        error: `Circuit breaker OPEN: ${this.circuitBreaker.getTripReason()}`,
-        requestId,
-        timestamp,
-      };
-      this.signingLog.push(result);
-      return result;
-    }
+    const check = this.circuitBreaker.checkCanExecute({
+      amountUsd: request.amountUsd,
+      healthFactor: request.healthFactor,
+      isRebalance: request.isRebalance,
+    });
 
-    if (!this.rateLimiter.tryAcquire("rebalance")) {
+    if (!check.allowed) {
       const result: SigningResult = {
         success: false,
-        error: "Rate limit exceeded for rebalance operations",
+        error: check.reason,
+        warnings: check.warnings,
         requestId,
         timestamp,
       };
@@ -66,8 +62,6 @@ export class CoboSigningService {
     }
 
     try {
-      this.circuitBreaker.recordAttempt();
-
       const txResult = await this.coboClient.createTransferTransaction({
         requestId,
         sourceWalletId: this.config.cobo.walletId,
@@ -77,21 +71,18 @@ export class CoboSigningService {
         memo: request.memo,
       });
 
-      this.circuitBreaker.recordSuccess();
+      this.circuitBreaker.recordTransaction(request.amountUsd, request.isRebalance);
 
       const result: SigningResult = {
         success: true,
         transactionId: txResult.transactionId,
+        warnings: check.warnings.length > 0 ? check.warnings : undefined,
         requestId,
         timestamp,
       };
       this.signingLog.push(result);
       return result;
     } catch (error) {
-      this.circuitBreaker.recordFailure(
-        error instanceof Error ? error.message : String(error)
-      );
-
       const result: SigningResult = {
         success: false,
         error: error instanceof Error ? error.message : String(error),

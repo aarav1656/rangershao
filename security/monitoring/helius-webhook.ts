@@ -161,7 +161,7 @@ export class HeliusWebhookManager {
       const solAmount = totalLamports / 1e9;
 
       if (solAmount > 100) {
-        this.circuitBreaker.emergencyStop(
+        this.circuitBreaker.emergencyPause(
           `Anomalous large transfer detected: ${solAmount} SOL in tx ${event.signature}`
         );
       }

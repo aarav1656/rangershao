@@ -1,98 +1,78 @@
 import { loadSecurityConfig, SecurityConfig } from "./config/security-config";
 import { CoboMpcClient } from "./cobo/cobo-mpc-client";
+import { CoboSolanaSigner } from "./cobo/cobo-solana-signer";
 import { CoboSigningService, SigningRequest, SigningResult } from "./cobo/cobo-signing-service";
 import { CircuitBreaker } from "./circuit-breaker/circuit-breaker";
-import { RateLimiter } from "./circuit-breaker/rate-limiter";
 import { HealthMonitor, Alert } from "./monitoring/health-monitor";
 import { HeliusWebhookManager } from "./monitoring/helius-webhook";
+import { AlertManager } from "./monitoring/alert-manager";
+import { HeliusMonitor } from "./monitoring/helius-monitor";
 
 export class SecurityOrchestrator {
   readonly config: SecurityConfig;
   readonly coboClient: CoboMpcClient;
+  readonly solanaSigner: CoboSolanaSigner;
   readonly signingService: CoboSigningService;
   readonly circuitBreaker: CircuitBreaker;
-  readonly rateLimiter: RateLimiter;
   readonly healthMonitor: HealthMonitor;
   readonly webhookManager: HeliusWebhookManager;
+  readonly alertManager: AlertManager;
+  readonly heliusMonitor: HeliusMonitor;
 
-  private constructor(config: SecurityConfig) {
+  private constructor(config: SecurityConfig, vaultAddress: string) {
     this.config = config;
 
-    this.circuitBreaker = new CircuitBreaker({
-      maxFailures: 3,
-      cooldownMs: config.circuitBreaker.cooldownAfterTripMs,
-      halfOpenMaxAttempts: 2,
-      maxTransactionsPerMinute: config.circuitBreaker.maxTransactionsPerMinute,
-      maxTransactionsPerHour: config.circuitBreaker.maxTransactionsPerHour,
-      healthFactorMinimum: config.circuitBreaker.healthFactorMinimum,
-      healthFactorEmergency: config.circuitBreaker.healthFactorEmergency,
-    });
-
-    this.rateLimiter = new RateLimiter();
-    this.rateLimiter.addBucket(
-      "rebalance",
-      config.rateLimit.maxRebalancesPerDay,
-      86400_000
-    );
-    this.rateLimiter.addBucket(
-      "rebalance-interval",
-      1,
-      config.rateLimit.rebalanceMinIntervalMs
-    );
+    this.circuitBreaker = new CircuitBreaker(config);
 
     this.coboClient = new CoboMpcClient(config.cobo);
+
+    this.solanaSigner = new CoboSolanaSigner(config.cobo, vaultAddress);
 
     this.signingService = new CoboSigningService(
       config,
       this.coboClient,
-      this.circuitBreaker,
-      this.rateLimiter
+      this.circuitBreaker
     );
+
+    this.alertManager = new AlertManager({
+      webhookUrl: config.monitoring.alertWebhookUrl,
+      enableConsole: true,
+    });
 
     this.healthMonitor = new HealthMonitor(
       config.monitoring,
       this.circuitBreaker
     );
 
+    this.heliusMonitor = new HeliusMonitor(
+      config.monitoring,
+      config.circuitBreaker,
+      this.alertManager
+    );
+
     this.webhookManager = new HeliusWebhookManager(
       config.monitoring,
       this.circuitBreaker
     );
-
-    this.circuitBreaker.onStateChange((state, reason) => {
-      console.log(`[SECURITY] Circuit breaker ${state}: ${reason}`);
-      if (state === "OPEN") {
-        this.sendAlert({
-          level: "critical",
-          message: `Circuit breaker tripped: ${reason}`,
-          timestamp: Date.now(),
-          source: "circuit-breaker",
-        });
-      }
-    });
   }
 
-  static async create(configOverrides?: Partial<SecurityConfig>): Promise<SecurityOrchestrator> {
+  static async create(
+    configOverrides?: Partial<SecurityConfig>,
+    vaultAddress?: string
+  ): Promise<SecurityOrchestrator> {
     const baseConfig = loadSecurityConfig();
     const config = configOverrides
       ? deepMerge(baseConfig, configOverrides)
       : baseConfig;
 
-    const orchestrator = new SecurityOrchestrator(config as SecurityConfig);
+    const addr = vaultAddress || config.monitoring.vaultAddress;
+    const orchestrator = new SecurityOrchestrator(config as SecurityConfig, addr);
     await orchestrator.coboClient.initialize();
+    await orchestrator.solanaSigner.initialize();
     return orchestrator;
   }
 
   async signTransaction(request: SigningRequest): Promise<SigningResult> {
-    if (!this.rateLimiter.tryAcquire("rebalance-interval")) {
-      return {
-        success: false,
-        error: `Rebalance too frequent. Wait ${this.rateLimiter.getTimeUntilAvailable("rebalance-interval")}ms`,
-        requestId: "",
-        timestamp: Date.now(),
-      };
-    }
-
     return this.signingService.signAndBroadcast(request);
   }
 
@@ -119,24 +99,24 @@ export class SecurityOrchestrator {
   }
 
   emergencyPause(reason: string): void {
-    this.circuitBreaker.emergencyStop(reason);
+    this.circuitBreaker.emergencyPause(reason);
     console.error(`[EMERGENCY] All operations paused: ${reason}`);
+    this.sendAlert({
+      level: "critical",
+      message: `Emergency pause activated: ${reason}`,
+      timestamp: Date.now(),
+      source: "orchestrator",
+    });
   }
 
   resumeOperations(): void {
-    this.circuitBreaker.resetEmergency();
-    console.log("[SECURITY] Operations resumed from emergency pause");
+    this.circuitBreaker.resume();
+    console.log("[SECURITY] Operations resumed");
   }
 
-  getSecurityStatus(): {
-    circuitBreaker: ReturnType<CircuitBreaker["getStatus"]>;
-    rateLimiter: ReturnType<RateLimiter["getStatus"]>;
-    health: ReturnType<HealthMonitor["getStatus"]>;
-    signing: ReturnType<CoboSigningService["getStats"]>;
-  } {
+  getSecurityStatus() {
     return {
       circuitBreaker: this.circuitBreaker.getStatus(),
-      rateLimiter: this.rateLimiter.getStatus(),
       health: this.healthMonitor.getStatus(),
       signing: this.signingService.getStats(),
     };
