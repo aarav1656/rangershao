@@ -36,8 +36,9 @@ export function TvlCard({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Card className="glow-emerald border-primary/20">
-        <CardContent className="pt-6">
+      <Card className="glow-emerald border-primary/20 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+        <CardContent className="pt-6 relative">
           <p className="text-sm font-medium text-muted-foreground">
             Total Value Locked
           </p>

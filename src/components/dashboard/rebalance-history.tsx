@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink, Clock } from "lucide-react";
 import type { RebalanceEvent } from "@/lib/types";
 
 interface RebalanceHistoryProps {
@@ -42,8 +42,9 @@ export function RebalanceHistory({ data }: RebalanceHistoryProps) {
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-            No rebalance events yet
+          <div className="flex h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border">
+            <Clock className="h-5 w-5 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Rebalance events appear here as the keeper bot operates</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

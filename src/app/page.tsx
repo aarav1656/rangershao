@@ -200,11 +200,18 @@ export default function Home() {
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <DashboardContent />
         </main>
-        <footer className="border-t border-border/50 py-6">
+        <footer className="border-t border-border/50 py-6 mt-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <p>Ranger Vault v0.1.0</p>
-              <p>Built on Solana</p>
+              <div className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                <p>Ranger Vault v0.1.0</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <p>Powered by Voltr Protocol</p>
+                <span className="text-border">|</span>
+                <p>Built on Solana</p>
+              </div>
             </div>
           </div>
         </footer>

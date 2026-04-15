@@ -153,7 +153,7 @@ export function DepositWithdraw() {
         </Tabs>
 
         {error && (
-          <div className="mt-3 rounded-md bg-loss p-3">
+          <div className="mt-3 rounded-md border border-destructive/20 bg-destructive/5 p-3">
             <p className="text-xs text-destructive">{error}</p>
           </div>
         )}
