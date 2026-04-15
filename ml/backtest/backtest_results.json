@@ -1,0 +1,62 @@
+{
+  "backtest_date": "2026-04-15",
+  "data_points": 48,
+  "date_range": {
+    "start": "2026-02-27",
+    "end": "2026-04-15"
+  },
+  "results": [
+    {
+      "strategy": "Equal Weight",
+      "total_return_pct": 0.4166,
+      "annualized_apy_pct": 3.2118,
+      "sharpe_ratio": -13.3885,
+      "max_drawdown_pct": 0.0,
+      "daily_var_95_pct": 0.007021,
+      "n_days": 48,
+      "avg_daily_return_pct": 0.008661
+    },
+    {
+      "strategy": "Ondo Only (Safe)",
+      "total_return_pct": 0.468,
+      "annualized_apy_pct": 3.6144,
+      "sharpe_ratio": 282.6518,
+      "max_drawdown_pct": 0.0,
+      "daily_var_95_pct": 0.009726,
+      "n_days": 48,
+      "avg_daily_return_pct": 0.009728
+    },
+    {
+      "strategy": "Static Optimal",
+      "total_return_pct": 0.4522,
+      "annualized_apy_pct": 3.4907,
+      "sharpe_ratio": -2.4653,
+      "max_drawdown_pct": 0.0,
+      "daily_var_95_pct": 0.007509,
+      "n_days": 48,
+      "avg_daily_return_pct": 0.009401
+    },
+    {
+      "strategy": "Regime-Based",
+      "total_return_pct": 0.3914,
+      "annualized_apy_pct": 3.0152,
+      "sharpe_ratio": -21.0413,
+      "max_drawdown_pct": 0.0,
+      "daily_var_95_pct": 0.006507,
+      "n_days": 48,
+      "avg_daily_return_pct": 0.008139
+    },
+    {
+      "strategy": "ML Risk-Adjusted",
+      "total_return_pct": 0.4536,
+      "annualized_apy_pct": 3.5015,
+      "sharpe_ratio": -2.093,
+      "max_drawdown_pct": 0.0,
+      "daily_var_95_pct": 0.007897,
+      "n_days": 48,
+      "avg_daily_return_pct": 0.009429
+    }
+  ],
+  "ml_beats_equal_weight": true,
+  "ml_beats_static": true
+}
