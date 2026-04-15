@@ -125,7 +125,7 @@ def fetch_defillama_marginfi() -> Optional[ProtocolSnapshot]:
 
 PROTOCOL_DEFAULTS = {
     "kamino": ProtocolSnapshot("kamino", 0.032, 0.0, 0.72, 14_460_000, 0),
-    "marginfi": ProtocolSnapshot("marginfi", 0.06, 0.0, 0.68, 120_000_000, 0),
+    "marginfi": ProtocolSnapshot("marginfi", 0.04, 0.0, 0.68, 120_000_000, 0),
     "jupiter_lend": ProtocolSnapshot("jupiter_lend", 0.036, 0.0, 0.65, 453_000_000, 0),
     "raydium_clmm": ProtocolSnapshot("raydium_clmm", 0.050, 0.0, 0.45, 4_600_000, 0),
     "ondo_usdy": ProtocolSnapshot("ondo_usdy", 0.036, 0.0, 0.0, 180_000_000, 0),

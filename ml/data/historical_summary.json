@@ -1,0 +1,27 @@
+{
+  "download_date": "2026-04-15T13:46:51.688842",
+  "total_rows": 880,
+  "complete_rows": 48,
+  "date_range": {
+    "start": "2023-11-18",
+    "end": "2026-04-15"
+  },
+  "protocols": {
+    "kamino": {
+      "pool_id": "d2141a59-c199-4be7-8d4b-c8223954836b",
+      "data_points": 880
+    },
+    "jupiter_lend": {
+      "pool_id": "d783c8df-e2ed-44b4-8317-161ccc1b5f06",
+      "data_points": 48
+    },
+    "raydium_clmm": {
+      "pool_id": "8ad76d42-6247-42f2-8281-5d59cb77b8b3",
+      "data_points": 448
+    },
+    "ondo_usdy": {
+      "pool_id": "00b83068-9f87-4411-b5d7-5d2ff48c40c4",
+      "data_points": 78
+    }
+  }
+}
