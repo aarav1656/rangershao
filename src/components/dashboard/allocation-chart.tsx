@@ -61,8 +61,11 @@ export function AllocationChart({ data }: AllocationChartProps) {
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-            Awaiting allocation data from vault
+          <div className="flex h-[300px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+              <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/></svg>
+            </div>
+            <p className="text-sm text-muted-foreground">Allocation visible after vault deployment</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4 lg:flex-row">

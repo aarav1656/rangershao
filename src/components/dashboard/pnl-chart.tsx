@@ -51,8 +51,11 @@ export function PnlChart({ data }: PnlChartProps) {
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-            Awaiting PnL data from vault
+          <div className="flex h-[300px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+              <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8v2m0 8v2"/></svg>
+            </div>
+            <p className="text-sm text-muted-foreground">PnL tracking begins after first deposit</p>
           </div>
         ) : (
           <Tabs defaultValue="cumulative">

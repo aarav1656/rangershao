@@ -153,7 +153,7 @@ Helius RPC ─────────►│         ┌──────▼─
 
 ### Development
 1. Start Next.js dashboard: `npm run dev`
-2. Start keeper bot: `cd keeper-bot && npm run dev`
+2. Start keeper bot: `npx ts-node src/keeper/main.ts`
 3. Use Solana devnet for testing
 
 ### Production (Mainnet)

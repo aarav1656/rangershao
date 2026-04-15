@@ -69,8 +69,11 @@ export function ApyChart({ data, onPeriodChange }: ApyChartProps) {
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-            Awaiting historical data from keeper bot
+          <div className="flex h-[300px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+              <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13.5l3-3 4 4 5-7 5 5"/></svg>
+            </div>
+            <p className="text-sm text-muted-foreground">APY data populates after first rebalance</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>

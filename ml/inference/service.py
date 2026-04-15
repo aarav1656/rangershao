@@ -71,10 +71,32 @@ class PoolData(BaseModel):
     il7d: Optional[float] = 0.0
 
 
+class ProtocolDataItem(BaseModel):
+    protocol: str
+    strategyId: str = ""
+    apy: float
+    tvl: float = 0.0
+    utilizationRate: float = 0.0
+    healthFactor: Optional[float] = None
+    lastUpdated: Optional[int] = None
+
+
+STRATEGY_TO_PROTOCOL = {
+    "kamino-usdc": "kamino",
+    "marginfi-usdc": "marginfi",
+    "jupiter-lend-usdc": "jupiter_lend",
+    "raydium-usdc-usdt": "raydium_clmm",
+    "ondo-usdy": "ondo_usdy",
+}
+
+PROTOCOL_TO_STRATEGY = {v: k for k, v in STRATEGY_TO_PROTOCOL.items()}
+
+
 class PredictRequest(BaseModel):
     rates: Optional[Dict[str, float]] = None
     utilization: Optional[Dict[str, float]] = None
     tvl: Optional[Dict[str, float]] = None
+    protocol_data: Optional[List[ProtocolDataItem]] = None
 
 
 class PredictResponse(BaseModel):
@@ -82,6 +104,7 @@ class PredictResponse(BaseModel):
     regime: str
     regime_confidence: float
     allocations: Dict[str, float]
+    weights: Dict[str, float]
     confidence: float
     risk_metrics: Dict[str, float]
     rebalance_urgency: str
@@ -154,14 +177,34 @@ async def predict_endpoint(req: PredictRequest):
     from inference.predict import run_inference
 
     input_data = None
-    if req.rates:
+
+    if req.protocol_data:
+        rates, utilization, tvl = {}, {}, {}
+        strategy_ids = {}
+        for item in req.protocol_data:
+            proto = STRATEGY_TO_PROTOCOL.get(item.strategyId, item.protocol)
+            rates[proto] = item.apy
+            utilization[proto] = item.utilizationRate
+            tvl[proto] = item.tvl
+            strategy_ids[proto] = item.strategyId or PROTOCOL_TO_STRATEGY.get(proto, proto)
+        input_data = {"rates": rates, "utilization": utilization, "tvl": tvl}
+    elif req.rates:
         input_data = {
             "rates": req.rates,
             "utilization": req.utilization or {},
             "tvl": req.tvl or {},
         }
+        strategy_ids = {p: PROTOCOL_TO_STRATEGY.get(p, p) for p in req.rates}
+    else:
+        strategy_ids = PROTOCOL_TO_STRATEGY.copy()
 
     signal = run_inference(input_data)
+
+    raw_allocs = signal.get("allocations", {})
+    weights_by_strategy = {
+        strategy_ids.get(proto, PROTOCOL_TO_STRATEGY.get(proto, proto)): w
+        for proto, w in raw_allocs.items()
+    }
 
     latency = (time.perf_counter() - start) * 1000
 
@@ -169,7 +212,8 @@ async def predict_endpoint(req: PredictRequest):
         predictions=signal.get("rate_observations", {}),
         regime=signal.get("regime", "NORMAL"),
         regime_confidence=signal.get("regime_confidence", 0.0),
-        allocations=signal.get("allocations", {}),
+        allocations=raw_allocs,
+        weights=weights_by_strategy,
         confidence=signal.get("confidence", 0.0),
         risk_metrics=signal.get("risk_metrics", {}),
         rebalance_urgency=signal.get("rebalance_urgency", "NONE"),

@@ -72,8 +72,9 @@ export function RiskMetricsPanel({ data }: RiskMetricsProps) {
           <CardTitle className="text-base font-medium">Risk Metrics</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-            Awaiting risk data from keeper bot
+          <div className="flex h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border">
+            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Risk metrics update after first rebalance</p>
           </div>
         </CardContent>
       </Card>
