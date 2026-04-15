@@ -1,65 +1,173 @@
-import Image from "next/image";
+"use client";
+
+import { SolanaWalletProvider } from "@/providers/wallet-provider";
+import { DashboardHeader } from "@/components/dashboard/header";
+import { TvlCard } from "@/components/dashboard/tvl-card";
+import { ApyChart } from "@/components/dashboard/apy-chart";
+import { AllocationChart } from "@/components/dashboard/allocation-chart";
+import { RebalanceHistory } from "@/components/dashboard/rebalance-history";
+import { RiskMetricsPanel } from "@/components/dashboard/risk-metrics";
+import { PnlChart } from "@/components/dashboard/pnl-chart";
+import { DepositWithdraw } from "@/components/dashboard/deposit-withdraw";
+import { StrategyThesis } from "@/components/dashboard/strategy-thesis";
+import { useEffect, useState, useCallback } from "react";
+import type {
+  ApyDataPoint,
+  AllocationEntry,
+  RebalanceEvent,
+  RiskMetrics,
+  PnlDataPoint,
+} from "@/lib/types";
+
+interface VaultOverview {
+  tvl: number;
+  tvlChange24h: number;
+  currentApy: number;
+  totalDepositors: number;
+  lastRebalance: string;
+}
+
+function useDashboardData() {
+  const [overview, setOverview] = useState<VaultOverview | null>(null);
+  const [apyData, setApyData] = useState<ApyDataPoint[]>([]);
+  const [allocations, setAllocations] = useState<AllocationEntry[]>([]);
+  const [rebalances, setRebalances] = useState<RebalanceEvent[]>([]);
+  const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null);
+  const [pnlData, setPnlData] = useState<PnlDataPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/vault");
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+
+      setOverview(data.overview);
+      setApyData(data.apyHistory || []);
+      setAllocations(data.allocations || []);
+      setRebalances(data.rebalances || []);
+      setRiskMetrics(data.riskMetrics || null);
+      setPnlData(data.pnlHistory || []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch vault data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  return {
+    overview,
+    apyData,
+    allocations,
+    rebalances,
+    riskMetrics,
+    pnlData,
+    loading,
+    error,
+    refetch: fetchData,
+  };
+}
+
+function DashboardContent() {
+  const {
+    overview,
+    apyData,
+    allocations,
+    rebalances,
+    riskMetrics,
+    pnlData,
+    loading,
+    error,
+  } = useDashboardData();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="space-y-3 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading vault data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="max-w-md space-y-2 text-center">
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <p className="text-xs text-muted-foreground/60">
+            The vault API will return live data once the keeper bot and contracts are deployed.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <section id="overview">
+        <TvlCard
+          tvl={overview?.tvl ?? 0}
+          tvlChange24h={overview?.tvlChange24h ?? 0}
+          currentApy={overview?.currentApy ?? 0}
+          totalDepositors={overview?.totalDepositors ?? 0}
+          lastRebalance={overview?.lastRebalance ?? ""}
+        />
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <ApyChart data={apyData} />
+          <PnlChart data={pnlData} />
+        </div>
+        <div className="space-y-6">
+          <section id="allocations">
+            <AllocationChart data={allocations} />
+          </section>
+          <DepositWithdraw />
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section id="risk">
+          <RiskMetricsPanel data={riskMetrics} />
+        </section>
+        <StrategyThesis />
+      </div>
+
+      <section id="history">
+        <RebalanceHistory data={rebalances} />
+      </section>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <SolanaWalletProvider>
+      <div className="min-h-screen bg-background">
+        <DashboardHeader />
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <DashboardContent />
+        </main>
+        <footer className="border-t border-border/50 py-6">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <p>Ranger Vault v0.1.0</p>
+              <p>Built on Solana</p>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </SolanaWalletProvider>
   );
 }
