@@ -149,3 +149,12 @@
     background-color: oklch(0.704 0.191 22.216 / 10%);
   }
 }
+
+@layer base {
+  [data-slot="card"] {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  [data-slot="card"]:hover {
+    border-color: oklch(1 0 0 / 12%);
+  }
+}

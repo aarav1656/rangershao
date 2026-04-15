@@ -11,6 +11,7 @@ import { PnlChart } from "@/components/dashboard/pnl-chart";
 import { DepositWithdraw } from "@/components/dashboard/deposit-withdraw";
 import { StrategyThesis } from "@/components/dashboard/strategy-thesis";
 import { MonteCarloStats } from "@/components/dashboard/monte-carlo-stats";
+import { DashboardSkeleton } from "@/components/dashboard/loading-skeleton";
 import { useEffect, useState, useCallback } from "react";
 import type {
   ApyDataPoint,
@@ -117,14 +118,7 @@ function DashboardContent() {
   } = useDashboardData();
 
   if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="space-y-3 text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading vault data...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {
