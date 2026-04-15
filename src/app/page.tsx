@@ -210,7 +210,7 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 <p>Powered by Voltr Protocol</p>
                 <span className="text-border">|</span>
-                <p>Built on Solana</p>
+                <p>Secured by Cobo MPC</p>
               </div>
             </div>
           </div>
