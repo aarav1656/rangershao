@@ -36,6 +36,7 @@ function useDashboardData() {
   const [pnlData, setPnlData] = useState<PnlDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<string>("live");
 
   const fetchData = useCallback(async () => {
     try {
@@ -43,6 +44,7 @@ function useDashboardData() {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
 
+      setDataSource(data.dataSource || "live");
       setOverview(data.overview);
       setApyData(data.apyHistory || []);
       setAllocations(data.allocations || []);
@@ -72,8 +74,23 @@ function useDashboardData() {
     pnlData,
     loading,
     error,
+    dataSource,
     refetch: fetchData,
   };
+}
+
+function BacktestBanner() {
+  return (
+    <div className="mb-6 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <div className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+        <span className="text-sm font-medium text-yellow-500">Backtest Mode</span>
+        <span className="text-xs text-muted-foreground">
+          Displaying real strategy backtest results (90-day, 10K Monte Carlo simulations). Live vault data will replace this once contracts are deployed.
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function DashboardContent() {
@@ -86,6 +103,7 @@ function DashboardContent() {
     pnlData,
     loading,
     error,
+    dataSource,
   } = useDashboardData();
 
   if (loading) {
@@ -114,6 +132,7 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6">
+      {dataSource === "backtest" && <BacktestBanner />}
       <section id="overview">
         <TvlCard
           tvl={overview?.tvl ?? 0}

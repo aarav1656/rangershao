@@ -33,6 +33,18 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# nested node_modules
+**/node_modules
+
+# keypairs
+**/keys/*.json
+*.json.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
 # vercel
 .vercel
 

@@ -9,12 +9,15 @@ interface AllocationChartProps {
 }
 
 const PROTOCOL_COLORS: Record<string, string> = {
+  "Ondo USDY": "#8b5cf6",
   Kamino: "#34d399",
   MarginFi: "#60a5fa",
-  Solend: "#fbbf24",
+  "Jupiter Lend": "#fbbf24",
+  "Raydium CLMM": "#f87171",
+  Solend: "#fb923c",
   Drift: "#a78bfa",
-  Save: "#f87171",
-  Mango: "#fb923c",
+  Save: "#f59e0b",
+  Mango: "#ec4899",
 };
 
 function getColor(protocol: string, fallback: string): string {

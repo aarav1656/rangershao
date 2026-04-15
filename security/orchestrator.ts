@@ -7,6 +7,9 @@ import { HealthMonitor, Alert } from "./monitoring/health-monitor";
 import { HeliusWebhookManager } from "./monitoring/helius-webhook";
 import { AlertManager } from "./monitoring/alert-manager";
 import { HeliusMonitor } from "./monitoring/helius-monitor";
+import { DrawdownTracker, DrawdownAction } from "./monitoring/drawdown-tracker";
+import { DepegMonitor, DepegAction } from "./monitoring/depeg-monitor";
+import { TvlMonitor, ProtocolTvlConfig, TvlDropAction } from "./monitoring/tvl-monitor";
 
 export class SecurityOrchestrator {
   readonly config: SecurityConfig;
@@ -18,8 +21,15 @@ export class SecurityOrchestrator {
   readonly webhookManager: HeliusWebhookManager;
   readonly alertManager: AlertManager;
   readonly heliusMonitor: HeliusMonitor;
+  readonly drawdownTracker: DrawdownTracker;
+  readonly depegMonitor: DepegMonitor;
+  readonly tvlMonitor: TvlMonitor;
 
-  private constructor(config: SecurityConfig, vaultAddress: string) {
+  private constructor(
+    config: SecurityConfig,
+    vaultAddress: string,
+    protocols: ProtocolTvlConfig[],
+  ) {
     this.config = config;
 
     this.circuitBreaker = new CircuitBreaker(config);
@@ -54,11 +64,34 @@ export class SecurityOrchestrator {
       config.monitoring,
       this.circuitBreaker
     );
+
+    this.drawdownTracker = new DrawdownTracker(
+      this.alertManager,
+      this.circuitBreaker
+    );
+
+    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+
+    this.depegMonitor = new DepegMonitor(
+      rpcUrl,
+      this.alertManager,
+      this.circuitBreaker,
+      60_000,
+    );
+
+    this.tvlMonitor = new TvlMonitor(
+      rpcUrl,
+      protocols,
+      this.alertManager,
+      this.circuitBreaker,
+      300_000,
+    );
   }
 
   static async create(
     configOverrides?: Partial<SecurityConfig>,
-    vaultAddress?: string
+    vaultAddress?: string,
+    protocols?: ProtocolTvlConfig[],
   ): Promise<SecurityOrchestrator> {
     const baseConfig = loadSecurityConfig();
     const config = configOverrides
@@ -66,7 +99,11 @@ export class SecurityOrchestrator {
       : baseConfig;
 
     const addr = vaultAddress || config.monitoring.vaultAddress;
-    const orchestrator = new SecurityOrchestrator(config as SecurityConfig, addr);
+    const orchestrator = new SecurityOrchestrator(
+      config as SecurityConfig,
+      addr,
+      protocols || [],
+    );
     await orchestrator.coboClient.initialize();
     await orchestrator.solanaSigner.initialize();
     return orchestrator;
@@ -92,10 +129,30 @@ export class SecurityOrchestrator {
   ): void {
     this.healthMonitor.setHealthCheckFunction(healthCheckFn);
     this.healthMonitor.start();
+    this.depegMonitor.start();
+    this.tvlMonitor.start();
   }
 
   stopMonitoring(): void {
     this.healthMonitor.stop();
+    this.depegMonitor.stop();
+    this.tvlMonitor.stop();
+  }
+
+  updateNav(nav: number): DrawdownAction | null {
+    return this.drawdownTracker.updateNav(nav);
+  }
+
+  onDrawdownAction(callback: (action: DrawdownAction) => void): void {
+    this.drawdownTracker.onAction(callback);
+  }
+
+  onDepegAction(callback: (action: DepegAction) => void): void {
+    this.depegMonitor.onAction(callback);
+  }
+
+  onTvlDropAction(callback: (action: TvlDropAction) => void): void {
+    this.tvlMonitor.onAction(callback);
   }
 
   emergencyPause(reason: string): void {
@@ -119,6 +176,9 @@ export class SecurityOrchestrator {
       circuitBreaker: this.circuitBreaker.getStatus(),
       health: this.healthMonitor.getStatus(),
       signing: this.signingService.getStats(),
+      drawdown: this.drawdownTracker.getStatus(),
+      depeg: this.depegMonitor.getStatus(),
+      tvl: this.tvlMonitor.getStatus(),
     };
   }
 

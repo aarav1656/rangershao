@@ -20,13 +20,38 @@ const serializeU16 = (value: number): Buffer => {
   return buf;
 };
 
-const FIELD_MAP: Record<string, { field: VaultConfigField; serialize: (v: string) => Buffer }> = {
-  MaxCap: { field: "MaxCap" as VaultConfigField, serialize: serializeU64 },
-  WithdrawalWaitingPeriod: { field: "WithdrawalWaitingPeriod" as VaultConfigField, serialize: serializeU64 },
-  ManagerPerformanceFee: { field: "ManagerPerformanceFee" as VaultConfigField, serialize: (v) => serializeU16(parseInt(v)) },
-  AdminPerformanceFee: { field: "AdminPerformanceFee" as VaultConfigField, serialize: (v) => serializeU16(parseInt(v)) },
-  RedemptionFee: { field: "RedemptionFee" as VaultConfigField, serialize: (v) => serializeU16(parseInt(v)) },
-  IssuanceFee: { field: "IssuanceFee" as VaultConfigField, serialize: (v) => serializeU16(parseInt(v)) },
+const FIELD_MAP: Record<
+  string,
+  { field: VaultConfigField; serialize: (v: string) => Buffer }
+> = {
+  MaxCap: {
+    field: VaultConfigField.MaxCap,
+    serialize: serializeU64,
+  },
+  WithdrawalWaitingPeriod: {
+    field: VaultConfigField.WithdrawalWaitingPeriod,
+    serialize: serializeU64,
+  },
+  ManagerPerformanceFee: {
+    field: VaultConfigField.ManagerPerformanceFee,
+    serialize: (v) => serializeU16(parseInt(v)),
+  },
+  AdminPerformanceFee: {
+    field: VaultConfigField.AdminPerformanceFee,
+    serialize: (v) => serializeU16(parseInt(v)),
+  },
+  RedemptionFee: {
+    field: VaultConfigField.RedemptionFee,
+    serialize: (v) => serializeU16(parseInt(v)),
+  },
+  IssuanceFee: {
+    field: VaultConfigField.IssuanceFee,
+    serialize: (v) => serializeU16(parseInt(v)),
+  },
+  LockedProfitDegradationDuration: {
+    field: VaultConfigField.LockedProfitDegradationDuration,
+    serialize: serializeU64,
+  },
 };
 
 const main = async () => {
@@ -44,6 +69,16 @@ const main = async () => {
   if (!fieldName || !value) {
     console.log("Usage: ts-node 07-update-config.ts <field> <value>");
     console.log("Fields:", Object.keys(FIELD_MAP).join(", "));
+    console.log("\nExamples:");
+    console.log(
+      '  ts-node 07-update-config.ts MaxCap 18446744073709551615'
+    );
+    console.log(
+      "  ts-node 07-update-config.ts ManagerPerformanceFee 1500"
+    );
+    console.log(
+      "  ts-node 07-update-config.ts WithdrawalWaitingPeriod 7776000"
+    );
     process.exit(1);
   }
 
@@ -58,11 +93,10 @@ const main = async () => {
 
   const data = fieldConfig.serialize(value);
 
-  const updateIx = await vc.createUpdateVaultConfigIx(
-    fieldConfig.field,
-    data,
-    { vault, admin: adminKp.publicKey }
-  );
+  const updateIx = await vc.createUpdateVaultConfigIx(fieldConfig.field, data, {
+    vault,
+    admin: adminKp.publicKey,
+  });
 
   const txSig = await sendAndConfirmOptimisedTx(
     [updateIx],

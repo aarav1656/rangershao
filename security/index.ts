@@ -26,4 +26,11 @@ export { HeliusWebhookManager } from "./monitoring/helius-webhook";
 export type { HeliusWebhookEvent } from "./monitoring/helius-webhook";
 export { HeliusMonitor } from "./monitoring/helius-monitor";
 
+export { DrawdownTracker, DrawdownLevel, DRAWDOWN_THRESHOLDS } from "./monitoring/drawdown-tracker";
+export type { DrawdownStatus, DrawdownAction } from "./monitoring/drawdown-tracker";
+export { DepegMonitor, DepegLevel, DEPEG_THRESHOLDS } from "./monitoring/depeg-monitor";
+export type { DepegStatus, DepegAction } from "./monitoring/depeg-monitor";
+export { TvlMonitor } from "./monitoring/tvl-monitor";
+export type { ProtocolTvlConfig, TvlStatus, TvlDropAction } from "./monitoring/tvl-monitor";
+
 export { SecurityOrchestrator } from "./orchestrator";

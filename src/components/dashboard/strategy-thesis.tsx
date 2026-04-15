@@ -33,11 +33,11 @@ const FEATURES = [
 ];
 
 const PROTOCOLS = [
+  "Ondo USDY",
   "Kamino",
   "MarginFi",
-  "Solend",
-  "Drift",
-  "Save",
+  "Jupiter Lend",
+  "Raydium CLMM",
 ];
 
 export function StrategyThesis() {

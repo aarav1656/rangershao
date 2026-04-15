@@ -16,6 +16,9 @@ export enum AlertType {
   LARGE_WITHDRAWAL = "large_withdrawal",
   REBALANCE_FAILED = "rebalance_failed",
   COBO_SIGNING_FAILED = "cobo_signing_failed",
+  DRAWDOWN_BREACH = "drawdown_breach",
+  USDC_DEPEG = "usdc_depeg",
+  TVL_DROP = "tvl_drop",
 }
 
 export interface Alert {
