@@ -1,0 +1,19 @@
+{
+  "trained_at": "2026-04-15T13:49:06.997971",
+  "epochs_run": 31,
+  "best_val_loss": 0.9848669767379761,
+  "n_training_samples": 32,
+  "n_validation_samples": 9,
+  "input_dim": 23,
+  "sequence_length": 7,
+  "protocols": [
+    "kamino",
+    "jupiter_lend",
+    "raydium_clmm",
+    "ondo_usdy"
+  ],
+  "date_range": {
+    "start": "2026-02-27",
+    "end": "2026-04-15"
+  }
+}
