@@ -5,4 +5,6 @@ export const LENDING_ADAPTOR_PROGRAM_ID = new PublicKey("aVoLTRCRt3NnnchvLYH6rMY
 export const RAYDIUM_ADAPTOR_PROGRAM_ID = new PublicKey("A5a3Xo2JaKbXNShSHHP4Fe1LxcxNuCZs97gy3FJMSzkM");
 export const TRUSTFUL_ADAPTOR_PROGRAM_ID = new PublicKey("3pnpK9nrs1R65eMV1wqCXkDkhSgN18xb1G5pgYPwoZjJ");
 
-export const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+export const USDC_MINT = new PublicKey(
+  process.env.ASSET_MINT || "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+);

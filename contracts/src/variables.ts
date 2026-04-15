@@ -27,8 +27,9 @@ export const adminFilePath =
   process.env.ADMIN_KEYPAIR_PATH || "./keys/admin.json";
 export const managerFilePath =
   process.env.MANAGER_KEYPAIR_PATH || "./keys/manager.json";
+// Mainnet USDC by default; set ASSET_MINT to devnet USDC for testing
 export const assetMintAddress =
-  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  process.env.ASSET_MINT || "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const assetTokenProgram = TOKEN_PROGRAM_ID.toBase58();
 
 export const vaultAddress = process.env.VAULT_ADDRESS || "";
