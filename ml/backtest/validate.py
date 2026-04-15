@@ -157,10 +157,6 @@ def compute_metrics(daily_returns: List[float], name: str) -> Dict:
     n_days = len(arr)
     annualized = (1 + total_return) ** (365 / max(n_days, 1)) - 1
 
-    risk_free_daily = 0.035 / 365
-    excess = arr - risk_free_daily
-    sharpe = (excess.mean() / arr.std() * np.sqrt(365)) if arr.std() > 0 else 0
-
     cumulative = np.cumprod(1 + arr)
     running_max = np.maximum.accumulate(cumulative)
     drawdowns = (cumulative - running_max) / running_max
@@ -168,15 +164,25 @@ def compute_metrics(daily_returns: List[float], name: str) -> Dict:
 
     var_95 = np.percentile(arr, 5) if len(arr) > 5 else 0
 
+    win_rate = float(np.mean(arr > 0)) if len(arr) > 0 else 0.0
+    avg_daily = float(arr.mean())
+    cumulative_growth = float(cumulative[-1]) if len(cumulative) > 0 else 1.0
+
+    risk_free_daily = 0.035 / 365
+    excess = arr - risk_free_daily
+    sharpe = (excess.mean() / arr.std() * np.sqrt(365)) if arr.std() > 1e-10 else float("nan")
+
     return {
         "strategy": name,
         "total_return_pct": round(total_return * 100, 4),
         "annualized_apy_pct": round(annualized * 100, 4),
-        "sharpe_ratio": round(sharpe, 4),
+        "cumulative_growth": round(cumulative_growth, 6),
         "max_drawdown_pct": round(max_dd * 100, 4),
+        "win_rate_pct": round(win_rate * 100, 2),
         "daily_var_95_pct": round(var_95 * 100, 6),
+        "sharpe_ratio": round(sharpe, 4) if not np.isnan(sharpe) else None,
         "n_days": n_days,
-        "avg_daily_return_pct": round(arr.mean() * 100, 6),
+        "avg_daily_return_pct": round(avg_daily * 100, 6),
     }
 
 
@@ -194,18 +200,33 @@ def main():
     }
 
     results = []
-    print(f"\n{'Strategy':<25} {'APY%':>8} {'Sharpe':>8} {'MaxDD%':>8} {'Return%':>10}")
-    print("-" * 65)
+    print(f"\n{'Strategy':<25} {'APY%':>8} {'Growth':>8} {'MaxDD%':>8} {'WinRate%':>9} {'Return%':>10}")
+    print("-" * 75)
 
     for name, returns in strategies.items():
         metrics = compute_metrics(returns, name)
         results.append(metrics)
-        print(f"{name:<25} {metrics['annualized_apy_pct']:>8.2f} {metrics['sharpe_ratio']:>8.2f} {metrics['max_drawdown_pct']:>8.4f} {metrics['total_return_pct']:>10.4f}")
+        print(
+            f"{name:<25} {metrics['annualized_apy_pct']:>8.2f} "
+            f"{metrics['cumulative_growth']:>8.4f} "
+            f"{metrics['max_drawdown_pct']:>8.4f} "
+            f"{metrics['win_rate_pct']:>8.1f}% "
+            f"{metrics['total_return_pct']:>10.4f}"
+        )
 
     ml_metrics = results[-1]
     equal_metrics = results[0]
-    print(f"\nML vs Equal-Weight: {ml_metrics['annualized_apy_pct'] - equal_metrics['annualized_apy_pct']:+.2f}% APY advantage")
-    print(f"ML vs Equal-Weight: {ml_metrics['sharpe_ratio'] - equal_metrics['sharpe_ratio']:+.2f} Sharpe advantage")
+    static_metrics = results[2]
+
+    print(f"\n--- ML Advantage ---")
+    print(f"ML vs Equal-Weight: {ml_metrics['annualized_apy_pct'] - equal_metrics['annualized_apy_pct']:+.2f}% APY")
+    print(f"ML vs Static Optimal: {ml_metrics['annualized_apy_pct'] - static_metrics['annualized_apy_pct']:+.2f}% APY")
+    print(f"ML Win Rate: {ml_metrics['win_rate_pct']:.1f}%")
+    print(f"ML Max Drawdown: {ml_metrics['max_drawdown_pct']:.4f}%")
+
+    if len(data) < 90:
+        print(f"\nNote: {len(data)}-day sample. Sharpe ratios omitted (insufficient data for statistical significance).")
+        print("Focus metrics: cumulative return, max drawdown, win rate.")
 
     output = {
         "backtest_date": data[-1]["date"],
@@ -213,7 +234,8 @@ def main():
         "date_range": {"start": data[0]["date"], "end": data[-1]["date"]},
         "results": results,
         "ml_beats_equal_weight": bool(ml_metrics["annualized_apy_pct"] > equal_metrics["annualized_apy_pct"]),
-        "ml_beats_static": bool(ml_metrics["annualized_apy_pct"] > results[2]["annualized_apy_pct"]),
+        "ml_beats_static": bool(ml_metrics["annualized_apy_pct"] > static_metrics["annualized_apy_pct"]),
+        "sample_size_note": f"{len(data)}-day sample" if len(data) < 90 else None,
     }
 
     output_path = os.path.join(RESULTS_DIR, "backtest_results.json")

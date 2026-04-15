@@ -10,9 +10,11 @@
       "strategy": "Equal Weight",
       "total_return_pct": 0.4166,
       "annualized_apy_pct": 3.2118,
-      "sharpe_ratio": -13.3885,
+      "cumulative_growth": 1.004166,
       "max_drawdown_pct": 0.0,
+      "win_rate_pct": 100.0,
       "daily_var_95_pct": 0.007021,
+      "sharpe_ratio": -13.3885,
       "n_days": 48,
       "avg_daily_return_pct": 0.008661
     },
@@ -20,9 +22,11 @@
       "strategy": "Ondo Only (Safe)",
       "total_return_pct": 0.468,
       "annualized_apy_pct": 3.6144,
-      "sharpe_ratio": 282.6518,
+      "cumulative_growth": 1.00468,
       "max_drawdown_pct": 0.0,
+      "win_rate_pct": 100.0,
       "daily_var_95_pct": 0.009726,
+      "sharpe_ratio": 282.6518,
       "n_days": 48,
       "avg_daily_return_pct": 0.009728
     },
@@ -30,9 +34,11 @@
       "strategy": "Static Optimal",
       "total_return_pct": 0.4522,
       "annualized_apy_pct": 3.4907,
-      "sharpe_ratio": -2.4653,
+      "cumulative_growth": 1.004522,
       "max_drawdown_pct": 0.0,
+      "win_rate_pct": 100.0,
       "daily_var_95_pct": 0.007509,
+      "sharpe_ratio": -2.4653,
       "n_days": 48,
       "avg_daily_return_pct": 0.009401
     },
@@ -40,9 +46,11 @@
       "strategy": "Regime-Based",
       "total_return_pct": 0.3914,
       "annualized_apy_pct": 3.0152,
-      "sharpe_ratio": -21.0413,
+      "cumulative_growth": 1.003914,
       "max_drawdown_pct": 0.0,
+      "win_rate_pct": 100.0,
       "daily_var_95_pct": 0.006507,
+      "sharpe_ratio": -21.0413,
       "n_days": 48,
       "avg_daily_return_pct": 0.008139
     },
@@ -50,13 +58,16 @@
       "strategy": "ML Risk-Adjusted",
       "total_return_pct": 0.4536,
       "annualized_apy_pct": 3.5015,
-      "sharpe_ratio": -2.093,
+      "cumulative_growth": 1.004536,
       "max_drawdown_pct": 0.0,
+      "win_rate_pct": 100.0,
       "daily_var_95_pct": 0.007897,
+      "sharpe_ratio": -2.093,
       "n_days": 48,
       "avg_daily_return_pct": 0.009429
     }
   ],
   "ml_beats_equal_weight": true,
-  "ml_beats_static": true
+  "ml_beats_static": true,
+  "sample_size_note": "48-day sample"
 }
