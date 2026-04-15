@@ -2,6 +2,8 @@ import axios, { AxiosInstance } from "axios";
 import { ProtocolData, KeeperConfig, StrategyConfig } from "../types";
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_RETRIES = 3;
+const BASE_BACKOFF_MS = 1_000;
 
 // USDC mint on Solana
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -18,6 +20,27 @@ export class ProtocolDataFetcher {
         "Accept": "application/json",
         "User-Agent": "ranger-keeper/1.0",
       },
+    });
+
+    this.http.interceptors.response.use(undefined, async (error) => {
+      const config = error.config;
+      if (!config || config.__retryCount >= MAX_RETRIES) return Promise.reject(error);
+
+      const status = error.response?.status;
+      if (status !== 429 && status !== 503) return Promise.reject(error);
+
+      config.__retryCount = (config.__retryCount ?? 0) + 1;
+      const retryAfter = error.response?.headers?.["retry-after"];
+      const delayMs = retryAfter
+        ? Number(retryAfter) * 1000
+        : BASE_BACKOFF_MS * Math.pow(2, config.__retryCount - 1);
+
+      console.warn(
+        `[ProtocolDataFetcher] ${status} on ${config.url}, retry ${config.__retryCount}/${MAX_RETRIES} in ${delayMs}ms`
+      );
+
+      await new Promise((r) => setTimeout(r, delayMs));
+      return this.http.request(config);
     });
   }
 
