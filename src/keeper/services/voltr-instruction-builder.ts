@@ -20,6 +20,14 @@ const MARGINFI_PROGRAM = new PublicKey("MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebV
 const MARGINFI_GROUP = new PublicKey("4qp6Fx6tnZkY5Wropq9wUYgtFxXKwE6viZxFHg3rdAG8");
 const MARGINFI_USDC_BANK = new PublicKey("2s37akK2eyBbp8DZgCm7RtsaEz8eJP3Nxd4urLHQv7yB");
 
+const SOLEND_PROGRAM = new PublicKey("So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo");
+const SOLEND_LENDING_MARKET = new PublicKey("4UpD2fh7xH3VP9QQaXtsS1YY3bxzWhtfpks7FatyKvdY");
+const SOLEND_USDC_COUNTERPARTY_TA = new PublicKey("8SheGtsopRUDzdiD6v6BR9a6bqZ9QwywYQY99Fp5meNf");
+const SOLEND_USDC_RESERVE = new PublicKey("BgxfHJDzm44T7XG68MYKx7YisTjZu73tVovyZSjJMpmw");
+const SOLEND_USDC_COLLATERAL_MINT = new PublicKey("993dVFL2uXWYeoXuEBFXR4BijeXdTv4s6BzsCjJZuwqk");
+const SOLEND_PYTH_ORACLE = new PublicKey("Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX");
+const SOLEND_SWITCHBOARD_ORACLE = new PublicKey("BjUgj6YCnFBZ49wF54ddBVA9qu8TeqkFtkbqmZcee8uW");
+
 interface ProtocolInstructionParams {
   manager: PublicKey;
   vault: PublicKey;
@@ -47,6 +55,8 @@ export class VoltrInstructionBuilder {
         return this.buildKlendDeposit(params);
       case "marginfi":
         return this.buildMarginfiDeposit(params);
+      case "solend":
+        return this.buildSolendDeposit(params);
       default:
         throw new Error(`Unsupported protocol for deposit: ${protocol}`);
     }
@@ -62,6 +72,8 @@ export class VoltrInstructionBuilder {
         return this.buildKlendWithdraw(params);
       case "marginfi":
         return this.buildMarginfiWithdraw(params);
+      case "solend":
+        return this.buildSolendWithdraw(params);
       default:
         throw new Error(`Unsupported protocol for withdraw: ${protocol}`);
     }
@@ -321,6 +333,128 @@ export class VoltrInstructionBuilder {
       { pubkey: marginfiAccount, isSigner: false, isWritable: true },
       { pubkey: MARGINFI_USDC_BANK, isSigner: false, isWritable: true },
       { pubkey: bankLiquidityVaultAuthority, isSigner: false, isWritable: true },
+    ];
+
+    const withdrawIx = await this.vc.createWithdrawStrategyIx(
+      { withdrawAmount: amount, additionalArgs: Buffer.from([]) },
+      {
+        manager,
+        vault,
+        vaultAssetMint: USDC_MINT,
+        assetTokenProgram,
+        strategy,
+        adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+        remainingAccounts,
+      }
+    );
+
+    return [...setupIxs, withdrawIx];
+  }
+
+  private async buildSolendDeposit(
+    params: ProtocolInstructionParams
+  ): Promise<TransactionInstruction[]> {
+    const { manager, vault, amount, assetTokenProgram } = params;
+
+    const [strategy] = PublicKey.findProgramAddressSync(
+      [SEEDS.STRATEGY, SOLEND_USDC_COUNTERPARTY_TA.toBuffer()],
+      LENDING_ADAPTOR_PROGRAM_ID
+    );
+
+    const [lendingMarketAuthority] = PublicKey.findProgramAddressSync(
+      [SOLEND_LENDING_MARKET.toBytes()],
+      SOLEND_PROGRAM
+    );
+
+    const { vaultStrategyAuth } = this.vc.findVaultStrategyAddresses(vault, strategy);
+
+    const setupIxs: TransactionInstruction[] = [];
+    const vaultCollateralAta = await this.ensureTokenAccount(
+      manager,
+      SOLEND_USDC_COLLATERAL_MINT,
+      vaultStrategyAuth,
+      setupIxs
+    );
+    await this.ensureTokenAccount(
+      manager,
+      USDC_MINT,
+      vaultStrategyAuth,
+      setupIxs,
+      assetTokenProgram
+    );
+
+    const remainingAccounts = [
+      { pubkey: SOLEND_USDC_COUNTERPARTY_TA, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: vaultCollateralAta, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_USDC_RESERVE, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_USDC_COLLATERAL_MINT, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_LENDING_MARKET, isSigner: false, isWritable: true },
+      { pubkey: lendingMarketAuthority, isSigner: false, isWritable: false },
+      { pubkey: SOLEND_PYTH_ORACLE, isSigner: false, isWritable: false },
+      { pubkey: SOLEND_SWITCHBOARD_ORACLE, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const depositIx = await this.vc.createDepositStrategyIx(
+      { depositAmount: amount, additionalArgs: Buffer.from([]) },
+      {
+        manager,
+        vault,
+        vaultAssetMint: USDC_MINT,
+        assetTokenProgram,
+        strategy,
+        adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+        remainingAccounts,
+      }
+    );
+
+    return [...setupIxs, depositIx];
+  }
+
+  private async buildSolendWithdraw(
+    params: ProtocolInstructionParams
+  ): Promise<TransactionInstruction[]> {
+    const { manager, vault, amount, assetTokenProgram } = params;
+
+    const [strategy] = PublicKey.findProgramAddressSync(
+      [SEEDS.STRATEGY, SOLEND_USDC_COUNTERPARTY_TA.toBuffer()],
+      LENDING_ADAPTOR_PROGRAM_ID
+    );
+
+    const [lendingMarketAuthority] = PublicKey.findProgramAddressSync(
+      [SOLEND_LENDING_MARKET.toBytes()],
+      SOLEND_PROGRAM
+    );
+
+    const { vaultStrategyAuth } = this.vc.findVaultStrategyAddresses(vault, strategy);
+
+    const setupIxs: TransactionInstruction[] = [];
+    const vaultCollateralAta = await this.ensureTokenAccount(
+      manager,
+      SOLEND_USDC_COLLATERAL_MINT,
+      vaultStrategyAuth,
+      setupIxs
+    );
+    await this.ensureTokenAccount(
+      manager,
+      USDC_MINT,
+      vaultStrategyAuth,
+      setupIxs,
+      assetTokenProgram
+    );
+
+    const remainingAccounts = [
+      { pubkey: SOLEND_USDC_COUNTERPARTY_TA, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: vaultCollateralAta, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_USDC_RESERVE, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_USDC_COLLATERAL_MINT, isSigner: false, isWritable: true },
+      { pubkey: SOLEND_LENDING_MARKET, isSigner: false, isWritable: true },
+      { pubkey: lendingMarketAuthority, isSigner: false, isWritable: false },
+      { pubkey: SOLEND_PYTH_ORACLE, isSigner: false, isWritable: false },
+      { pubkey: SOLEND_SWITCHBOARD_ORACLE, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ];
 
     const withdrawIx = await this.vc.createWithdrawStrategyIx(

@@ -3,7 +3,7 @@ import { VersionedTransaction, TransactionInstruction, PublicKey } from "@solana
 export interface StrategyAllocation {
   strategyId: string;
   strategyPubkey: PublicKey;
-  protocol: "kamino" | "marginfi" | "jupiter_lend" | "raydium";
+  protocol: "kamino" | "marginfi" | "jupiter_lend" | "solend" | "raydium";
   currentWeight: number;
   targetWeight: number;
   currentAmountUsdc: number;
@@ -79,7 +79,7 @@ export interface KeeperConfig {
 export interface StrategyConfig {
   id: string;
   pubkey: string;
-  protocol: "kamino" | "marginfi" | "jupiter_lend" | "raydium";
+  protocol: "kamino" | "marginfi" | "jupiter_lend" | "solend" | "raydium";
   enabled: boolean;
   maxAllocationPct: number;
   minAllocationPct: number;
