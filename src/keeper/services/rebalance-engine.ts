@@ -1,4 +1,6 @@
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { Connection, PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { BN } from "@coral-xyz/anchor";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   StrategyAllocation,
   RebalancePlan,
@@ -8,18 +10,23 @@ import {
   ProtocolData,
   StrategyConfig,
 } from "../types";
+import { VoltrInstructionBuilder } from "./voltr-instruction-builder";
 
 export class RebalanceEngine {
   private readonly config: KeeperConfig;
   private readonly vaultPubkey: PublicKey;
   private readonly strategiesById: Map<string, StrategyConfig>;
+  private readonly instructionBuilder: VoltrInstructionBuilder;
+  private readonly managerPubkey: PublicKey;
 
-  constructor(config: KeeperConfig) {
+  constructor(config: KeeperConfig, connection: Connection, managerPubkey: PublicKey) {
     this.config = config;
     this.vaultPubkey = new PublicKey(config.vaultPubkey);
+    this.managerPubkey = managerPubkey;
     this.strategiesById = new Map(
       config.strategies.map((strategy) => [strategy.id, strategy])
     );
+    this.instructionBuilder = new VoltrInstructionBuilder(connection);
   }
 
   async computeRebalancePlan(
@@ -38,11 +45,16 @@ export class RebalanceEngine {
       return null;
     }
 
+    const [withdrawals, deposits] = await Promise.all([
+      this.computeWithdrawals(allocations),
+      this.computeDeposits(allocations),
+    ]);
+
     return {
       vaultPubkey: this.vaultPubkey,
       timestamp: Date.now(),
-      withdrawals: this.computeWithdrawals(allocations),
-      deposits: this.computeDeposits(allocations),
+      withdrawals,
+      deposits,
       totalDriftPct,
       trigger: "drift",
     };
@@ -72,56 +84,86 @@ export class RebalanceEngine {
     return { should: false, trigger: "drift" };
   }
 
-  private computeWithdrawals(
+  private async computeWithdrawals(
     allocations: StrategyAllocation[]
-  ): RebalanceAction[] {
-    return allocations
-      .filter((allocation) => allocation.currentWeight > allocation.targetWeight)
-      .map((allocation) => {
-        const amountUsdc =
-          (allocation.currentAmountUsdc - allocation.targetAmountUsdc) * 0.999;
+  ): Promise<RebalanceAction[]> {
+    const actions: RebalanceAction[] = [];
 
-        if (amountUsdc <= 0) {
-          return null;
+    for (const allocation of allocations) {
+      if (allocation.currentWeight <= allocation.targetWeight) continue;
+
+      const amountUsdc =
+        (allocation.currentAmountUsdc - allocation.targetAmountUsdc) * 0.999;
+      if (amountUsdc <= 0) continue;
+
+      const amountLamports = new BN(Math.floor(amountUsdc * 1e6));
+      const marginfiAccount = this.config.marginfiAccount
+        ? new PublicKey(this.config.marginfiAccount)
+        : undefined;
+
+      const instructions = await this.instructionBuilder.buildWithdrawInstructions(
+        allocation.protocol,
+        {
+          manager: this.managerPubkey,
+          vault: this.vaultPubkey,
+          amount: amountLamports,
+          assetTokenProgram: TOKEN_PROGRAM_ID,
+          marginfiAccount,
         }
+      );
 
-        const instructions: TransactionInstruction[] = [];
+      actions.push({
+        strategyId: allocation.strategyId,
+        strategyPubkey: allocation.strategyPubkey,
+        protocol: allocation.protocol as ProtocolData["protocol"],
+        direction: "withdraw",
+        amountUsdc,
+        instructions,
+      });
+    }
 
-        return {
-          strategyId: allocation.strategyId,
-          strategyPubkey: allocation.strategyPubkey,
-          protocol: allocation.protocol as ProtocolData["protocol"],
-          direction: "withdraw",
-          amountUsdc,
-          instructions,
-        };
-      })
-      .filter((action): action is RebalanceAction => action !== null);
+    return actions;
   }
 
-  private computeDeposits(allocations: StrategyAllocation[]): RebalanceAction[] {
-    return allocations
-      .filter((allocation) => allocation.currentWeight < allocation.targetWeight)
-      .map((allocation) => {
-        const amountUsdc =
-          allocation.targetAmountUsdc - allocation.currentAmountUsdc;
+  private async computeDeposits(
+    allocations: StrategyAllocation[]
+  ): Promise<RebalanceAction[]> {
+    const actions: RebalanceAction[] = [];
 
-        if (amountUsdc <= 0) {
-          return null;
+    for (const allocation of allocations) {
+      if (allocation.currentWeight >= allocation.targetWeight) continue;
+
+      const amountUsdc =
+        allocation.targetAmountUsdc - allocation.currentAmountUsdc;
+      if (amountUsdc <= 0) continue;
+
+      const amountLamports = new BN(Math.floor(amountUsdc * 1e6));
+      const marginfiAccount = this.config.marginfiAccount
+        ? new PublicKey(this.config.marginfiAccount)
+        : undefined;
+
+      const instructions = await this.instructionBuilder.buildDepositInstructions(
+        allocation.protocol,
+        {
+          manager: this.managerPubkey,
+          vault: this.vaultPubkey,
+          amount: amountLamports,
+          assetTokenProgram: TOKEN_PROGRAM_ID,
+          marginfiAccount,
         }
+      );
 
-        const instructions: TransactionInstruction[] = [];
+      actions.push({
+        strategyId: allocation.strategyId,
+        strategyPubkey: allocation.strategyPubkey,
+        protocol: allocation.protocol as ProtocolData["protocol"],
+        direction: "deposit",
+        amountUsdc,
+        instructions,
+      });
+    }
 
-        return {
-          strategyId: allocation.strategyId,
-          strategyPubkey: allocation.strategyPubkey,
-          protocol: allocation.protocol as ProtocolData["protocol"],
-          direction: "deposit",
-          amountUsdc,
-          instructions,
-        };
-      })
-      .filter((action): action is RebalanceAction => action !== null);
+    return actions;
   }
 
   private withTargetAmounts(

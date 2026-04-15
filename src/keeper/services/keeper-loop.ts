@@ -2,7 +2,6 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import {
   KeeperConfig,
   StrategyAllocation,
-  ProtocolData,
   TransactionSigner,
   StrategyConfig,
 } from "../types";
@@ -38,7 +37,11 @@ export class KeeperLoop {
 
     this.protocolDataFetcher = new ProtocolDataFetcher(config);
     this.allocationEngine = new AllocationEngine(config);
-    this.rebalanceEngine = new RebalanceEngine(config);
+    this.rebalanceEngine = new RebalanceEngine(
+      config,
+      this.connection,
+      new PublicKey(config.managerPubkey)
+    );
     this.transactionBuilder = new TransactionBuilder(this.connection, config);
     this.transactionExecutor = new TransactionExecutor(
       this.connection,

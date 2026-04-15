@@ -4,9 +4,11 @@ export function loadConfig(): KeeperConfig {
   const heliusRpcUrl = requireEnv("HELIUS_RPC_URL");
   const heliusApiKey = requireEnv("HELIUS_API_KEY");
   const vaultPubkey = requireEnv("VAULT_PUBKEY");
+  const managerPubkey = requireEnv("MANAGER_PUBKEY");
 
   return {
     vaultPubkey,
+    managerPubkey,
     heliusRpcUrl,
     heliusApiKey,
     intervalMs: parseInt(process.env.KEEPER_INTERVAL_MS ?? "1800000", 10),
@@ -18,6 +20,7 @@ export function loadConfig(): KeeperConfig {
     ),
     mlModelUrl: process.env.ML_MODEL_URL || undefined,
     coboApiBaseUrl: process.env.COBO_API_BASE_URL || undefined,
+    marginfiAccount: process.env.MARGINFI_ACCOUNT || undefined,
     maxSlippageBps: parseInt(process.env.MAX_SLIPPAGE_BPS ?? "50", 10),
     strategies: parseStrategies(),
   };

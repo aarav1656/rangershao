@@ -96,9 +96,15 @@ export class TransactionBuilder {
     return tables;
   }
 
-  private getAltAddressesForProtocol(_protocol: string): string[] {
-    // Known ALT addresses per protocol - populated during integration
-    return [];
+  private getAltAddressesForProtocol(protocol: string): string[] {
+    const ALT_MAP: Record<string, string[]> = {
+      kamino: ["284iwGtA9X9aLy3KsyV8uT2pXLARhYbiSi5SiM2g47M2"],
+      jupiter_lend: ["284iwGtA9X9aLy3KsyV8uT2pXLARhYbiSi5SiM2g47M2"],
+      marginfi: ["HGmknUTUmeovMc9ryERNWG6UFZDFDVr9xrum3ZhyL4fC"],
+    };
+    const vaultAlt = process.env.LOOKUP_TABLE_ADDRESS;
+    const protocolAlts = ALT_MAP[protocol] ?? [];
+    return vaultAlt ? [vaultAlt, ...protocolAlts] : protocolAlts;
   }
 
   async simulateTransaction(tx: VersionedTransaction): Promise<{

@@ -63,6 +63,7 @@ export interface AllocationWeights {
 
 export interface KeeperConfig {
   vaultPubkey: string;
+  managerPubkey: string;
   heliusRpcUrl: string;
   heliusApiKey: string;
   intervalMs: number;
@@ -70,6 +71,7 @@ export interface KeeperConfig {
   apyChangeThresholdPct: number;
   mlModelUrl?: string;
   coboApiBaseUrl?: string;
+  marginfiAccount?: string;
   maxSlippageBps: number;
   strategies: StrategyConfig[];
 }
