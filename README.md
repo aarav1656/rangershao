@@ -173,7 +173,12 @@ pip install -r requirements.txt
 
 ## On-Chain Verification
 
-All vault operations are verifiable on Solscan. Vault address and transaction links will be published here after mainnet deployment.
+Devnet verification, admin keypair plus RPC path:
+- Admin keypair: `DCUGehQb5GKW9eiQcQRCkpBsLUz3HpGzVjqskH78xCSD`
+- Manager keypair: `2HMJK3s7RHVcZetj3ECmuNxPRMq3jEUQ7rERMAyhKVq2`
+- Admin-signed devnet tx: [`2rYDMaAu...QSqos9`](https://solscan.io/tx/2rYDMaAuP78Zg1EUbySJjZPMJyM6M1jENFKt6uSgYEoR3kRkrbaCUcskCmc6qgJRyt8oFyAmuQQWLBq6MtQSqos9?cluster=devnet)
+
+Vault deployment targets mainnet because the Voltr vault program (`vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8`) is mainnet-only. See [docs/E2E-STATUS.md](docs/E2E-STATUS.md) for the full verification log, gap analysis, and the deployment playbook for mainnet.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full deployment flow and verification guide.
 
