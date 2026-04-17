@@ -139,7 +139,8 @@ export class KeeperLoop {
       const plan = await this.rebalanceEngine.computeRebalancePlan(
         currentAllocations,
         targetWeights,
-        totalVaultUsdc
+        totalVaultUsdc,
+        rebalanceCheck.trigger
       );
 
       if (!plan) {
@@ -154,11 +155,15 @@ export class KeeperLoop {
 
       // Step 6.5: Circuit breaker gate
       if (this.circuitBreaker) {
+        const avgHealthFactor =
+          protocolData.reduce((sum, d) => {
+            return sum + (d.healthFactor ?? 1.5);
+          }, 0) / Math.max(protocolData.length, 1);
         const totalAmountUsd = plan.withdrawals.reduce((sum, w) => sum + w.amountUsdc, 0) +
           plan.deposits.reduce((sum, d) => sum + d.amountUsdc, 0);
         const check = this.circuitBreaker.checkCanExecute({
           amountUsd: totalAmountUsd,
-          healthFactor: 1.0, // TODO: fetch real health factor from protocol data
+          healthFactor: avgHealthFactor,
           isRebalance: true,
         });
 

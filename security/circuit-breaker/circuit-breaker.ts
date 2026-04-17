@@ -257,7 +257,10 @@ export class CircuitBreaker {
    * Get the total USD volume for today.
    */
   private getDailyVolume(): number {
-    return this.transactionLog.reduce((sum, tx) => sum + tx.amountUsd, 0);
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return this.transactionLog
+      .filter((tx) => tx.timestamp > oneDayAgo)
+      .reduce((sum, tx) => sum + tx.amountUsd, 0);
   }
 
   /**
@@ -294,7 +297,6 @@ export class CircuitBreaker {
     if (today !== this.dailyResetDate) {
       this.dailyResetDate = today;
       this.rebalancesToday = 0;
-      this.transactionLog = [];
     }
   }
 

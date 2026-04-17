@@ -13,6 +13,24 @@ async function getOrchestrator() {
 export async function POST(request: NextRequest) {
   try {
     const { action, reason } = await request.json();
+    const authToken = process.env.EMERGENCY_AUTH_TOKEN;
+
+    if (!authToken) {
+      return NextResponse.json(
+        { error: "Emergency endpoint is not configured" },
+        { status: 503 }
+      );
+    }
+
+    const authorization = request.headers.get("authorization");
+    const expectedAuthorization = `Bearer ${authToken}`;
+
+    if (authorization !== expectedAuthorization) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     const orch = await getOrchestrator();
 

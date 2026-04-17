@@ -58,7 +58,7 @@ export interface ProtocolData {
 export interface AllocationWeights {
   weights: Record<string, number>;
   confidence: number;
-  source: "ml_model" | "fallback_greedy";
+  source: "ml_model" | "ensemble_model" | "fallback_greedy";
 }
 
 export interface KeeperConfig {
@@ -70,6 +70,7 @@ export interface KeeperConfig {
   driftThresholdPct: number;
   apyChangeThresholdPct: number;
   mlModelUrl?: string;
+  useEnsemble?: boolean;
   coboApiBaseUrl?: string;
   marginfiAccount?: string;
   maxSlippageBps: number;

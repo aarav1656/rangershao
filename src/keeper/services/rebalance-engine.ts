@@ -32,7 +32,8 @@ export class RebalanceEngine {
   async computeRebalancePlan(
     currentAllocations: StrategyAllocation[],
     targetWeights: AllocationWeights,
-    totalVaultUsdc: number
+    totalVaultUsdc: number,
+    trigger: "drift" | "apy_change" = "drift"
   ): Promise<RebalancePlan | null> {
     const allocations = this.withTargetAmounts(
       currentAllocations,
@@ -56,7 +57,7 @@ export class RebalanceEngine {
       withdrawals,
       deposits,
       totalDriftPct,
-      trigger: "drift",
+      trigger,
     };
   }
 
@@ -81,7 +82,7 @@ export class RebalanceEngine {
       return { should: true, trigger: "drift" };
     }
 
-    return { should: false, trigger: "drift" };
+    return { should: false, trigger: "drift" as const };
   }
 
   private async computeWithdrawals(
