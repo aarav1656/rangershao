@@ -44,3 +44,18 @@ export const withdrawAssetAmountPerStrategy =
 
 export const outputMintAddress = assetMintAddress;
 export const outputTokenProgram = assetTokenProgram;
+
+export const validateAmount = (
+  amount: string | number,
+  label: string
+): void => {
+  const parsedAmount = parseInt(String(amount), 10);
+
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    throw new Error(`Invalid ${label}: ${amount}`);
+  }
+
+  if (parsedAmount > 1_000_000_000_000) {
+    throw new Error(`${label} exceeds safety limit`);
+  }
+};

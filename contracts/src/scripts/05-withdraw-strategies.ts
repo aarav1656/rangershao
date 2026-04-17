@@ -16,6 +16,7 @@ import {
   assetTokenProgram,
   withdrawAssetAmountPerStrategy,
   marginfiAccount,
+  validateAmount,
 } from "../variables";
 import { PROTOCOL_CONSTANTS, USDC_MINT } from "../constants";
 import * as dotenv from "dotenv";
@@ -286,6 +287,7 @@ const main = async () => {
   const managerKp = loadKeypair(managerFilePath);
   const vault = new PublicKey(vaultAddress);
   const withdrawAmount = new BN(withdrawAssetAmountPerStrategy);
+  validateAmount(withdrawAssetAmountPerStrategy, "WITHDRAW_AMOUNT");
 
   console.log("Withdrawing from strategies...");
 

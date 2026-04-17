@@ -47,6 +47,16 @@ export const sendAndConfirmOptimisedTx = async (
   });
 
   const requiredCUs = rpcResponse.value.unitsConsumed;
+  if (rpcResponse.value.err) {
+    console.error(
+      "Simulation failure:",
+      JSON.stringify(rpcResponse.value.err),
+      rpcResponse.value.logs
+    );
+    throw new Error(
+      `Simulation failed: ${JSON.stringify(rpcResponse.value.err)}`
+    );
+  }
   if (!requiredCUs) {
     console.error("Simulation logs:", rpcResponse.value.logs);
     throw new Error("Failed to get required CUs from simulation");

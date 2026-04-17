@@ -16,6 +16,7 @@ import {
   assetTokenProgram,
   depositAssetAmountPerStrategy,
   marginfiAccount,
+  validateAmount,
 } from "../variables";
 import { PROTOCOL_CONSTANTS, USDC_MINT } from "../constants";
 import * as dotenv from "dotenv";
@@ -276,6 +277,7 @@ const main = async () => {
   const managerKp = loadKeypair(managerFilePath);
   const vault = new PublicKey(vaultAddress);
   const depositAmount = new BN(depositAssetAmountPerStrategy);
+  validateAmount(depositAssetAmountPerStrategy, "DEPOSIT_AMOUNT");
 
   console.log("Depositing to strategies...");
   console.log("Amount per strategy:", depositAmount.toString(), "lamports");
