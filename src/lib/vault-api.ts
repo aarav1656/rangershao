@@ -17,68 +17,50 @@ function getConnection(): Connection {
   return new Connection(RPC_URL, "confirmed");
 }
 
+async function fetchVaultData(): Promise<any> {
+  const baseUrl = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000");
+  const res = await fetch(`${baseUrl}/api/vault`, { next: { revalidate: 60 } });
+  if (!res.ok) throw new Error(`Vault API returned ${res.status}`);
+  return res.json();
+}
+
 export async function fetchVaultState(): Promise<VaultState> {
-  if (!VAULT_ADDRESS) {
-    throw new Error("NOT_IMPLEMENTED: VAULT_ADDRESS not configured");
-  }
-  const connection = getConnection();
-  const pubkey = new PublicKey(VAULT_ADDRESS);
-  const accountInfo = await connection.getAccountInfo(pubkey);
-  if (!accountInfo) {
-    throw new Error("Vault account not found on-chain");
-  }
-  // TODO: Decode account data using vault IDL once available from Solana Contract Engineer
-  throw new Error("NOT_IMPLEMENTED: Vault account deserialization pending IDL from contract team");
+  const data = await fetchVaultData();
+  return {
+    tvl: data.overview?.tvl ?? 0,
+    tvlChange24h: data.overview?.tvlChange24h ?? 0,
+    currentApy: data.overview?.currentApy ?? 0,
+    totalDepositors: data.overview?.totalDepositors ?? 0,
+    vaultAddress: data.vaultOnChain?.exists ? VAULT_ADDRESS : "",
+    lastRebalance: data.overview?.lastRebalance ?? "",
+    dataSource: data.dataSource ?? "backtest",
+  } as unknown as VaultState;
 }
 
 export async function fetchApyHistory(days: number): Promise<ApyDataPoint[]> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!apiBase) {
-    throw new Error("NOT_IMPLEMENTED: API_BASE_URL not configured for historical APY data");
-  }
-  const res = await fetch(`${apiBase}/api/vault/apy-history?days=${days}`);
-  if (!res.ok) throw new Error(`APY history fetch failed: ${res.status}`);
-  return res.json();
+  const data = await fetchVaultData();
+  const history = data.apyHistory ?? [];
+  return history.slice(-days);
 }
 
 export async function fetchAllocations(): Promise<AllocationEntry[]> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!apiBase) {
-    throw new Error("NOT_IMPLEMENTED: API_BASE_URL not configured for allocation data");
-  }
-  const res = await fetch(`${apiBase}/api/vault/allocations`);
-  if (!res.ok) throw new Error(`Allocations fetch failed: ${res.status}`);
-  return res.json();
+  const data = await fetchVaultData();
+  return data.allocations ?? [];
 }
 
 export async function fetchRebalanceHistory(): Promise<RebalanceEvent[]> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!apiBase) {
-    throw new Error("NOT_IMPLEMENTED: API_BASE_URL not configured for rebalance history");
-  }
-  const res = await fetch(`${apiBase}/api/vault/rebalance-history`);
-  if (!res.ok) throw new Error(`Rebalance history fetch failed: ${res.status}`);
-  return res.json();
+  const data = await fetchVaultData();
+  return data.rebalances ?? [];
 }
 
 export async function fetchRiskMetrics(): Promise<RiskMetrics> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!apiBase) {
-    throw new Error("NOT_IMPLEMENTED: API_BASE_URL not configured for risk metrics");
-  }
-  const res = await fetch(`${apiBase}/api/vault/risk-metrics`);
-  if (!res.ok) throw new Error(`Risk metrics fetch failed: ${res.status}`);
-  return res.json();
+  const data = await fetchVaultData();
+  return data.riskMetrics ?? {};
 }
 
 export async function fetchPnlHistory(): Promise<PnlDataPoint[]> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!apiBase) {
-    throw new Error("NOT_IMPLEMENTED: API_BASE_URL not configured for PnL data");
-  }
-  const res = await fetch(`${apiBase}/api/vault/pnl-history`);
-  if (!res.ok) throw new Error(`PnL history fetch failed: ${res.status}`);
-  return res.json();
+  const data = await fetchVaultData();
+  return data.pnlHistory ?? [];
 }
 
 export { RPC_URL, VAULT_PROGRAM_ID, VAULT_ADDRESS };

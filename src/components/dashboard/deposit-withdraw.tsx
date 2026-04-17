@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { VoltrClient } from "@voltr/vault-sdk";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+// @ts-expect-error bn.js is installed but this repo does not include @types/bn.js.
+import BN from "bn.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,24 +14,94 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Wallet, ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react";
 
+const VAULT_ADDRESS =
+  process.env.NEXT_PUBLIC_VAULT_ADDRESS ||
+  "7kQJhMKoGCGESbWjtaStqBi5YHzY8w6kTwLfoBqBDuhk";
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const USDC_DECIMALS = 1_000_000;
+
 export function DepositWithdraw() {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successSignature, setSuccessSignature] = useState<string | null>(null);
+  const [lpPreview, setLpPreview] = useState<string | null>(null);
+
+  const toAmountBn = (value: string) => {
+    const parsedAmount = Number.parseFloat(value);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      throw new Error("Enter a valid USDC amount");
+    }
+
+    return new BN(Math.round(parsedAmount * USDC_DECIMALS));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      if (!amount || Number(amount) <= 0) {
+        setLpPreview(null);
+        return;
+      }
+
+      try {
+        const client = new VoltrClient(connection);
+        const vaultPubkey = new PublicKey(VAULT_ADDRESS);
+        const amountBN = toAmountBn(amount);
+        const estimatedLp = await client.calculateLpForDeposit(vaultPubkey, amountBN);
+
+        if (!cancelled) {
+          setLpPreview(estimatedLp.toString());
+        }
+      } catch {
+        if (!cancelled) {
+          setLpPreview(null);
+        }
+      }
+    };
+
+    void loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [amount, connection]);
 
   const handleDeposit = async () => {
     if (!publicKey || !amount) return;
     setLoading(true);
     setError(null);
+    setSuccessSignature(null);
 
     try {
-      const vaultProgramId = process.env.NEXT_PUBLIC_VAULT_PROGRAM_ID;
-      if (!vaultProgramId) {
-        throw new Error("NOT_IMPLEMENTED: Vault program not deployed yet. Deposit will be enabled once contract is live.");
-      }
-      throw new Error("NOT_IMPLEMENTED: Deposit instruction pending IDL from contract team");
+      const client = new VoltrClient(connection);
+      const vaultPubkey = new PublicKey(VAULT_ADDRESS);
+      const usdcMint = new PublicKey(USDC_MINT);
+      const amountBN = toAmountBn(amount);
+      const tokenProgram = new PublicKey(TOKEN_PROGRAM);
+
+      // Derive the user's USDC ATA before sending so the wallet/account setup is validated.
+      await getAssociatedTokenAddress(usdcMint, publicKey, false, tokenProgram);
+
+      const depositIx = await client.createDepositVaultIx(amountBN, {
+        userTransferAuthority: publicKey,
+        vault: vaultPubkey,
+        vaultAssetMint: usdcMint,
+        assetTokenProgram: TOKEN_PROGRAM_ID,
+      });
+
+      const tx = new Transaction().add(depositIx);
+      tx.feePayer = publicKey;
+
+      const signature = await sendTransaction(tx, connection);
+
+      setSuccessSignature(signature);
+      setAmount("");
+      setLpPreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Deposit failed");
     } finally {
@@ -38,13 +113,39 @@ export function DepositWithdraw() {
     if (!publicKey || !amount) return;
     setLoading(true);
     setError(null);
+    setSuccessSignature(null);
 
     try {
-      const vaultProgramId = process.env.NEXT_PUBLIC_VAULT_PROGRAM_ID;
-      if (!vaultProgramId) {
-        throw new Error("NOT_IMPLEMENTED: Vault program not deployed yet. Withdraw will be enabled once contract is live.");
-      }
-      throw new Error("NOT_IMPLEMENTED: Withdraw instruction pending IDL from contract team");
+      const client = new VoltrClient(connection);
+      const vaultPubkey = new PublicKey(VAULT_ADDRESS);
+      const usdcMint = new PublicKey(USDC_MINT);
+      const amountBN = toAmountBn(amount);
+      const tokenProgram = new PublicKey(TOKEN_PROGRAM);
+      await getAssociatedTokenAddress(usdcMint, publicKey, false, tokenProgram);
+      const lpAmount = await client.calculateLpForWithdraw(vaultPubkey, amountBN);
+
+      const withdrawIx = await client.createInstantWithdrawVaultIx(
+        {
+          amount: lpAmount,
+          isAmountInLp: true,
+          isWithdrawAll: false,
+        },
+        {
+          userTransferAuthority: publicKey,
+          vault: vaultPubkey,
+          vaultAssetMint: usdcMint,
+          assetTokenProgram: TOKEN_PROGRAM_ID,
+        },
+      );
+
+      const tx = new Transaction().add(withdrawIx);
+      tx.feePayer = publicKey;
+
+      const signature = await sendTransaction(tx, connection);
+
+      setSuccessSignature(signature);
+      setAmount("");
+      setLpPreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Withdraw failed");
     } finally {
@@ -107,6 +208,13 @@ export function DepositWithdraw() {
                 step="0.01"
               />
             </div>
+            {lpPreview && (
+              <div className="rounded-md bg-muted p-3">
+                <p className="text-xs text-muted-foreground">
+                  Estimated LP tokens: {lpPreview}
+                </p>
+              </div>
+            )}
             <Button
               onClick={handleDeposit}
               disabled={loading || !amount || Number(amount) <= 0}
@@ -155,6 +263,23 @@ export function DepositWithdraw() {
         {error && (
           <div className="mt-3 rounded-md border border-destructive/20 bg-destructive/5 p-3">
             <p className="text-xs text-destructive">{error}</p>
+          </div>
+        )}
+
+        {successSignature && (
+          <div className="mt-3 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">
+              Success. Transaction submitted:{" "}
+              <a
+                href={`https://solscan.io/tx/${successSignature}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                {successSignature.slice(0, 12)}...
+                {successSignature.slice(-8)}
+              </a>
+            </p>
           </div>
         )}
 
