@@ -11,15 +11,21 @@ const ML_TIMEOUT_MS = 5_000;
 export class AllocationEngine {
   private config: KeeperConfig;
   private mlModelUrl?: string;
+  private useEnsemble: boolean;
 
   constructor(config: KeeperConfig) {
     this.config = config;
     this.mlModelUrl = config.mlModelUrl;
+    this.useEnsemble = config.useEnsemble ?? false;
   }
 
   async getWeights(protocolData: ProtocolData[]): Promise<AllocationWeights> {
     if (this.mlModelUrl) {
       try {
+        if (this.useEnsemble) {
+          return await this.fetchEnsembleWeights(protocolData);
+        }
+
         return await this.fetchMlWeights(protocolData);
       } catch (error) {
         const err = error as Error;
@@ -33,11 +39,8 @@ export class AllocationEngine {
   private async fetchMlWeights(
     protocolData: ProtocolData[]
   ): Promise<AllocationWeights> {
-    if (!this.mlModelUrl) {
-      throw new Error("ML model URL is not configured");
-    }
-
-    const url = `${this.mlModelUrl.replace(/\/$/, "")}/predict`;
+    const mlModelUrl = this.mlModelUrl!;
+    const url = `${mlModelUrl.replace(/\/$/, "")}/predict`;
     const response = await axios.post<{
       weights: Record<string, number>;
       confidence: number;
@@ -51,6 +54,32 @@ export class AllocationEngine {
       weights: this.filterEnabledWeights(response.data.weights),
       confidence: response.data.confidence,
       source: "ml_model",
+    };
+  }
+
+  private async fetchEnsembleWeights(
+    protocolData: ProtocolData[]
+  ): Promise<AllocationWeights> {
+    const mlModelUrl = this.mlModelUrl!;
+    const url = `${mlModelUrl.replace(/\/$/, "")}/allocate/full`;
+    const response = await axios.post<{
+      weights: Record<string, number>;
+      confidence: number;
+      source: AllocationWeights["source"];
+    }>(
+      url,
+      {
+        rates: protocolData.map((data) => data.apy),
+        utilization: protocolData.map((data) => data.utilizationRate),
+        tvl: protocolData.map((data) => data.tvl),
+      },
+      { timeout: ML_TIMEOUT_MS }
+    );
+
+    return {
+      weights: this.filterEnabledWeights(response.data.weights),
+      confidence: response.data.confidence,
+      source: response.data.source,
     };
   }
 
