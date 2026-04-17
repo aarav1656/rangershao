@@ -23,7 +23,7 @@ except ImportError:
 
 from models.forecaster import load_model, PROTOCOLS as MODEL_PROTOCOLS
 
-PROTOCOLS = ["kamino", "jupiter_lend", "raydium_clmm", "ondo_usdy"]
+PROTOCOLS = ["kamino", "jupiter_lend", "raydium_clmm", "ondo_usdy", "marginfi"]
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 RESULTS_DIR = os.path.dirname(__file__)
 
@@ -46,12 +46,17 @@ def load_data():
         rows = list(reader)
 
     complete = []
+    base_protocols = ["kamino", "jupiter_lend", "raydium_clmm", "ondo_usdy"]
     for row in rows:
-        if all(row.get(f"{p}_apy") for p in PROTOCOLS):
+        if all(row.get(f"{p}_apy") for p in base_protocols):
             entry = {"date": row["date"]}
-            for p in PROTOCOLS:
+            for p in base_protocols:
                 entry[f"{p}_apy"] = float(row[f"{p}_apy"])
                 entry[f"{p}_tvl"] = float(row.get(f"{p}_tvl", 0) or 0)
+            # marginfi may not be in all rows; default to 0
+            if "marginfi" in PROTOCOLS:
+                entry["marginfi_apy"] = float(row.get("marginfi_apy", 0) or 0)
+                entry["marginfi_tvl"] = float(row.get("marginfi_tvl", 0) or 0)
             complete.append(entry)
     return complete
 
@@ -165,50 +170,42 @@ def ml_strategy(data: List[Dict]) -> List[float]:
 
     # Use LSTM model predictions to drive allocation
     print("Using LSTM model for strategy allocation")
-    from models.forecaster import compute_derived_features
+    from models.forecaster import compute_derived_features, FEATURES_PER_PROTOCOL
     model = model_bundle["model"]
     scaler = model_bundle["scaler"]
 
     for i, row in enumerate(data):
         apys = {p: row[f"{p}_apy"] for p in PROTOCOLS}
 
-        # Build feature vector for model input (raw APYs, base APY, reward APY, log(TVL))
-        features = []
+        raw_features = []
         for p in PROTOCOLS:
-            features.append(row[f"{p}_apy"])
-            features.append(row.get(f"{p}_apy_base", 0))
-            features.append(row.get(f"{p}_apy_reward", 0))
+            raw_features.append(row[f"{p}_apy"])
+            raw_features.append(row.get(f"{p}_apy_base", 0))
+            raw_features.append(row.get(f"{p}_apy_reward", 0))
             tvl = row[f"{p}_tvl"]
-            features.append(np.log1p(tvl))
+            raw_features.append(np.log1p(tvl))
 
-        # If we have enough history, compute derived features
+        raw_array = np.array([raw_features], dtype=np.float32)
+
         if i > 0:
+            prev_raw = []
             prev_row = data[i - 1]
-            prev_features = []
             for p in PROTOCOLS:
-                prev_features.append(prev_row[f"{p}_apy"])
-                prev_features.append(prev_row.get(f"{p}_apy_base", 0))
-                prev_features.append(prev_row.get(f"{p}_apy_reward", 0))
+                prev_raw.append(prev_row[f"{p}_apy"])
+                prev_raw.append(prev_row.get(f"{p}_apy_base", 0))
+                prev_raw.append(prev_row.get(f"{p}_apy_reward", 0))
                 tvl = prev_row[f"{p}_tvl"]
-                prev_features.append(np.log1p(tvl))
-
-            # Compute momentum
-            for j in range(len(PROTOCOLS)):
-                momentum = features[j * 4] - prev_features[j * 4]
-                features.append(momentum)
+                prev_raw.append(np.log1p(tvl))
+            combined_raw = np.array([prev_raw, raw_features], dtype=np.float32)
+            derived = compute_derived_features(combined_raw)
+            full_features = np.concatenate([raw_array, derived[1:2]], axis=1)
         else:
-            for _ in range(len(PROTOCOLS)):
-                features.append(0.0)
-
-        # Add aggregated features
-        apys_list = [features[j * 4] for j in range(len(PROTOCOLS))]
-        features.append(np.mean(apys_list))
-        features.append(np.std(apys_list) if len(apys_list) > 1 else 0)
-        features.append(max(apys_list) - min(apys_list) if apys_list else 0)
+            derived = compute_derived_features(raw_array)
+            full_features = np.concatenate([raw_array, derived], axis=1)
 
         # Get model prediction (weights for each protocol)
         try:
-            feature_array = np.array([features], dtype=np.float32)
+            feature_array = full_features
             scaled = scaler.transform(feature_array)
 
             # Pad if necessary for sequence length
@@ -272,7 +269,7 @@ def compute_metrics(daily_returns: List[float], name: str) -> Dict:
 
     risk_free_daily = 0.035 / 365
     excess = arr - risk_free_daily
-    sharpe = (excess.mean() / arr.std() * np.sqrt(365)) if arr.std() > 1e-10 else float("nan")
+    sharpe = (excess.mean() / excess.std() * np.sqrt(365)) if excess.std() > 1e-10 else float("nan")
 
     return {
         "strategy": name,

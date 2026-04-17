@@ -22,6 +22,7 @@ from ml.config import AllocationConfig, InferenceConfig
 from ml.models.allocator import ConvexAllocator, EnsembleAllocator
 
 logger = logging.getLogger(__name__)
+SEQUENCE_LEN = 7
 
 app = FastAPI(
     title="Ranger Yield Optimizer",
@@ -291,8 +292,16 @@ async def full_allocate_endpoint(req: FullAllocateRequest):
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    """Health check with model status."""
+    """Health check with model status and real inference latency."""
     start = time.perf_counter()
+    if state.model_bundle is not None:
+        try:
+            model = state.model_bundle["model"]
+            dummy = __import__("torch").zeros(1, SEQUENCE_LEN, state.model_bundle["info"].get("input_dim", 23))
+            with __import__("torch").no_grad():
+                model(dummy)
+        except Exception:
+            pass
     latency = (time.perf_counter() - start) * 1000
     return HealthResponse(
         status="healthy" if state.model_bundle is not None else "degraded",

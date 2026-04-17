@@ -272,7 +272,7 @@ class BacktestEngine:
         sharpe = (mean_return / max(std_return, 1e-8)) * np.sqrt(365)
 
         # Max drawdown
-        cumulative = np.cumsum(returns)
+        cumulative = np.cumprod(1 + returns)
         running_max = np.maximum.accumulate(cumulative)
         drawdowns = running_max - cumulative
         max_drawdown = float(np.max(drawdowns)) if len(drawdowns) > 0 else 0.0
