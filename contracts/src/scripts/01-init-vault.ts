@@ -1,9 +1,13 @@
 import {
   AddressLookupTableAccount,
   AddressLookupTableProgram,
+  ComputeBudgetProgram,
   Keypair,
   PublicKey,
+  TransactionConfirmationStrategy,
   TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import { VoltrClient } from "@voltr/vault-sdk";
 import { getConnection, loadKeypair } from "../utils/connection";
@@ -43,11 +47,13 @@ const main = async () => {
     ...new Set(createVaultIx.keys.map((key) => key.pubkey.toBase58())),
   ].map((address) => new PublicKey(address));
 
+  console.log("\n--- Step 1: Create Address Lookup Table ---");
+  const recentSlot = await connection.getSlot("finalized");
   const [createLookupTableIx, lutAddress] =
     AddressLookupTableProgram.createLookupTable({
       authority: adminKp.publicKey,
       payer: adminKp.publicKey,
-      recentSlot: await connection.getSlot("confirmed"),
+      recentSlot,
     });
   const extendLookupTableIx = AddressLookupTableProgram.extendLookupTable({
     lookupTable: lutAddress,
@@ -56,25 +62,53 @@ const main = async () => {
     addresses: uniqueAddresses,
   });
 
-  const lutSetupIxs: TransactionInstruction[] = [
+  const lutIxs: TransactionInstruction[] = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }),
     createLookupTableIx,
     extendLookupTableIx,
   ];
-  const lutTxSig = await sendAndConfirmOptimisedTx(
-    lutSetupIxs,
-    process.env.HELIUS_RPC_URL!,
-    adminKp
+
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  const lutTx = new VersionedTransaction(
+    new TransactionMessage({
+      instructions: lutIxs,
+      payerKey: adminKp.publicKey,
+      recentBlockhash: latestBlockhash.blockhash,
+    }).compileToV0Message()
   );
+  lutTx.sign([adminKp]);
 
-  await sleep(2000);
+  const lutTxSig = await connection.sendTransaction(lutTx, {
+    skipPreflight: false,
+    preflightCommitment: "confirmed",
+    maxRetries: 5,
+  });
+  const lutConfirmStrategy: TransactionConfirmationStrategy = {
+    signature: lutTxSig,
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+  };
+  await connection.confirmTransaction(lutConfirmStrategy, "confirmed");
+  console.log("LUT created:", lutTxSig);
+  console.log("LUT address:", lutAddress.toBase58());
 
-  const lutAccount = await connection.getAddressLookupTable(lutAddress);
+  console.log("Waiting for LUT activation (15s)...");
+  await sleep(15000);
+
+  let lutAccount = await connection.getAddressLookupTable(lutAddress);
+  if (!lutAccount.value) {
+    console.log("LUT not ready, waiting 15 more seconds...");
+    await sleep(15000);
+    lutAccount = await connection.getAddressLookupTable(lutAddress);
+  }
   if (!lutAccount.value) {
     throw new Error(
       `Failed to fetch activated lookup table: ${lutAddress.toBase58()}`
     );
   }
 
+  console.log("\n--- Step 2: Initialize Vault ---");
   const addressLookupTables: AddressLookupTableAccount[] = [lutAccount.value];
   const txSig = await sendAndConfirmOptimisedTx(
     [createVaultIx],
@@ -86,7 +120,7 @@ const main = async () => {
 
   console.log("\n=== VAULT INITIALIZED ===");
   console.log("LUT Setup Transaction:", lutTxSig);
-  console.log("Transaction:", txSig);
+  console.log("Vault Init Transaction:", txSig);
   console.log("Vault Address:", vaultKp.publicKey.toBase58());
   console.log("Lookup Table:", lutAddress.toBase58());
   console.log("\nUpdate your .env with:");

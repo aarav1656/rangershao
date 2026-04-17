@@ -24,7 +24,8 @@ const main = async () => {
   const vault = new PublicKey(vaultAddress);
 
   const adaptors = [
-    { name: "Lending", programId: LENDING_ADAPTOR_PROGRAM_ID },
+    // Lending adaptor already added in previous run
+    // { name: "Lending", programId: LENDING_ADAPTOR_PROGRAM_ID },
     { name: "Raydium CLMM", programId: RAYDIUM_ADAPTOR_PROGRAM_ID },
     { name: "Trustful", programId: TRUSTFUL_ADAPTOR_PROGRAM_ID },
   ];
