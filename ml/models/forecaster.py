@@ -279,7 +279,8 @@ def train_model(epochs: int = 200, lr: float = 0.001, patience: int = 30):
     return model
 
 
-def augment_data(data: np.ndarray, factor: int = 10) -> np.ndarray:
+def augment_data(data: np.ndarray, factor: int = 2) -> np.ndarray:
+    print(f"WARNING: Augmenting {len(data)} samples by {factor}x with synthetic noise")
     augmented = [data]
     for _ in range(factor - 1):
         noise = np.random.normal(0, 0.001, data.shape).astype(np.float32)

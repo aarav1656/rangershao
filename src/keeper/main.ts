@@ -23,7 +23,7 @@ async function main() {
   await signer.initialize();
   console.log("[keeper] Cobo MPC signer initialized");
 
-  const keeper = new KeeperLoop(config, signer);
+  const keeper = new KeeperLoop(config, signer, circuitBreaker);
 
   process.on("SIGINT", async () => {
     console.log("\n[keeper] Received SIGINT, shutting down...");

@@ -55,19 +55,19 @@
       "avg_daily_return_pct": 0.008139
     },
     {
-      "strategy": "ML Risk-Adjusted",
-      "total_return_pct": 0.4536,
-      "annualized_apy_pct": 3.5015,
-      "cumulative_growth": 1.004536,
+      "strategy": "ML LSTM-Driven",
+      "total_return_pct": 0.4167,
+      "annualized_apy_pct": 3.2123,
+      "cumulative_growth": 1.004167,
       "max_drawdown_pct": 0.0,
       "win_rate_pct": 100.0,
-      "daily_var_95_pct": 0.007897,
-      "sharpe_ratio": -2.093,
+      "daily_var_95_pct": 0.007016,
+      "sharpe_ratio": -13.3961,
       "n_days": 48,
-      "avg_daily_return_pct": 0.009429
+      "avg_daily_return_pct": 0.008663
     }
   ],
   "ml_beats_equal_weight": true,
-  "ml_beats_static": true,
+  "ml_beats_static": false,
   "sample_size_note": "48-day sample"
 }

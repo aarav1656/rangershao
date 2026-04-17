@@ -28,6 +28,7 @@ export class CoboSigningService {
   private circuitBreaker: CircuitBreaker;
   private config: SecurityConfig;
   private signingLog: SigningResult[] = [];
+  private static readonly MAX_LOG_SIZE = 1000;
 
   constructor(
     config: SecurityConfig,
@@ -58,6 +59,9 @@ export class CoboSigningService {
         timestamp,
       };
       this.signingLog.push(result);
+      if (this.signingLog.length > CoboSigningService.MAX_LOG_SIZE) {
+        this.signingLog = this.signingLog.slice(-CoboSigningService.MAX_LOG_SIZE);
+      }
       return result;
     }
 
@@ -81,6 +85,9 @@ export class CoboSigningService {
         timestamp,
       };
       this.signingLog.push(result);
+      if (this.signingLog.length > CoboSigningService.MAX_LOG_SIZE) {
+        this.signingLog = this.signingLog.slice(-CoboSigningService.MAX_LOG_SIZE);
+      }
       return result;
     } catch (error) {
       const result: SigningResult = {
@@ -90,6 +97,9 @@ export class CoboSigningService {
         timestamp,
       };
       this.signingLog.push(result);
+      if (this.signingLog.length > CoboSigningService.MAX_LOG_SIZE) {
+        this.signingLog = this.signingLog.slice(-CoboSigningService.MAX_LOG_SIZE);
+      }
       return result;
     }
   }

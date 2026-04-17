@@ -102,7 +102,7 @@ function parseStrategies(): StrategyConfig[] {
       maxAllocationPct:
         typeof item.maxAllocationPct === "number"
           ? item.maxAllocationPct
-          : 100,
+          : 60,
       minAllocationPct:
         typeof item.minAllocationPct === "number"
           ? item.minAllocationPct

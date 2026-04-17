@@ -15,6 +15,14 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
+from models.forecaster import load_model, PROTOCOLS as MODEL_PROTOCOLS
+
 PROTOCOLS = ["kamino", "jupiter_lend", "raydium_clmm", "ondo_usdy"]
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 RESULTS_DIR = os.path.dirname(__file__)
@@ -113,30 +121,123 @@ def regime_strategy(data: List[Dict]) -> List[float]:
 
 def ml_strategy(data: List[Dict]) -> List[float]:
     daily_returns = []
+    model_bundle = load_model()
+
+    if model_bundle is None:
+        print("WARNING: LSTM model not available, falling back to heuristic strategy")
+        # Fallback: hardcoded risk-adjusted logic
+        for i, row in enumerate(data):
+            apys = {p: row[f"{p}_apy"] for p in PROTOCOLS}
+            tvls = {p: row[f"{p}_tvl"] for p in PROTOCOLS}
+
+            risk_adjusted = {}
+            risk_scores = {"kamino": 0.14, "jupiter_lend": 0.21, "raydium_clmm": 0.15, "ondo_usdy": 0.07}
+            for p in PROTOCOLS:
+                risk_adjusted[p] = apys[p] * (1 - risk_scores[p])
+
+            total_ra = sum(risk_adjusted.values())
+            if total_ra > 0:
+                weights = {p: risk_adjusted[p] / total_ra for p in PROTOCOLS}
+            else:
+                weights = {p: 1.0 / len(PROTOCOLS) for p in PROTOCOLS}
+
+            if i > 0:
+                prev = data[i - 1]
+                for p in PROTOCOLS:
+                    momentum = apys[p] - float(prev[f"{p}_apy"])
+                    if momentum > 0:
+                        weights[p] *= 1.1
+                    elif momentum < -0.005:
+                        weights[p] *= 0.9
+
+            for p in PROTOCOLS:
+                weights[p] = max(MIN_ALLOC, min(MAX_ALLOC, weights[p]))
+            weights["ondo_usdy"] = max(weights["ondo_usdy"], MIN_ONDO)
+            if weights["raydium_clmm"] > MAX_RAYDIUM:
+                weights["raydium_clmm"] = MAX_RAYDIUM
+
+            total = sum(weights.values())
+            weights = {p: w / total for p, w in weights.items()}
+
+            ret = sum(weights[p] * apys[p] / 365 for p in PROTOCOLS)
+            daily_returns.append(ret)
+        return daily_returns
+
+    # Use LSTM model predictions to drive allocation
+    print("Using LSTM model for strategy allocation")
+    from models.forecaster import compute_derived_features
+    model = model_bundle["model"]
+    scaler = model_bundle["scaler"]
+
     for i, row in enumerate(data):
         apys = {p: row[f"{p}_apy"] for p in PROTOCOLS}
-        tvls = {p: row[f"{p}_tvl"] for p in PROTOCOLS}
 
-        risk_adjusted = {}
-        risk_scores = {"kamino": 0.14, "jupiter_lend": 0.21, "raydium_clmm": 0.15, "ondo_usdy": 0.07}
+        # Build feature vector for model input (raw APYs, base APY, reward APY, log(TVL))
+        features = []
         for p in PROTOCOLS:
-            risk_adjusted[p] = apys[p] * (1 - risk_scores[p])
+            features.append(row[f"{p}_apy"])
+            features.append(row.get(f"{p}_apy_base", 0))
+            features.append(row.get(f"{p}_apy_reward", 0))
+            tvl = row[f"{p}_tvl"]
+            features.append(np.log1p(tvl))
 
-        total_ra = sum(risk_adjusted.values())
-        if total_ra > 0:
-            weights = {p: risk_adjusted[p] / total_ra for p in PROTOCOLS}
+        # If we have enough history, compute derived features
+        if i > 0:
+            prev_row = data[i - 1]
+            prev_features = []
+            for p in PROTOCOLS:
+                prev_features.append(prev_row[f"{p}_apy"])
+                prev_features.append(prev_row.get(f"{p}_apy_base", 0))
+                prev_features.append(prev_row.get(f"{p}_apy_reward", 0))
+                tvl = prev_row[f"{p}_tvl"]
+                prev_features.append(np.log1p(tvl))
+
+            # Compute momentum
+            for j in range(len(PROTOCOLS)):
+                momentum = features[j * 4] - prev_features[j * 4]
+                features.append(momentum)
         else:
+            for _ in range(len(PROTOCOLS)):
+                features.append(0.0)
+
+        # Add aggregated features
+        apys_list = [features[j * 4] for j in range(len(PROTOCOLS))]
+        features.append(np.mean(apys_list))
+        features.append(np.std(apys_list) if len(apys_list) > 1 else 0)
+        features.append(max(apys_list) - min(apys_list) if apys_list else 0)
+
+        # Get model prediction (weights for each protocol)
+        try:
+            feature_array = np.array([features], dtype=np.float32)
+            scaled = scaler.transform(feature_array)
+
+            # Pad if necessary for sequence length
+            from models.forecaster import SEQUENCE_LEN
+            if scaled.shape[0] < SEQUENCE_LEN:
+                pad = np.zeros((SEQUENCE_LEN - scaled.shape[0], scaled.shape[1]), dtype=np.float32)
+                seq = np.concatenate([pad, scaled], axis=0)
+            else:
+                seq = scaled[-SEQUENCE_LEN:]
+
+            with torch.no_grad():
+                input_tensor = torch.FloatTensor(seq).unsqueeze(0)
+                pred_raw = model(input_tensor).numpy()[0]
+
+            # Convert predictions to weights via softmax
+            pred_weights = np.exp(pred_raw) / np.sum(np.exp(pred_raw))
+
+            weights = {}
+            for idx, p in enumerate(PROTOCOLS):
+                if idx < len(pred_weights):
+                    weights[p] = float(pred_weights[idx])
+                else:
+                    weights[p] = 1.0 / len(PROTOCOLS)
+
+        except Exception as e:
+            print(f"WARNING: Model inference failed at row {i}: {e}. Using equal weight fallback.")
             weights = {p: 1.0 / len(PROTOCOLS) for p in PROTOCOLS}
 
-        if i > 0:
-            prev = data[i - 1]
-            for p in PROTOCOLS:
-                momentum = apys[p] - float(prev[f"{p}_apy"])
-                if momentum > 0:
-                    weights[p] *= 1.1
-                elif momentum < -0.005:
-                    weights[p] *= 0.9
-
+        # Apply constraints
         for p in PROTOCOLS:
             weights[p] = max(MIN_ALLOC, min(MAX_ALLOC, weights[p]))
         weights["ondo_usdy"] = max(weights["ondo_usdy"], MIN_ONDO)
@@ -148,6 +249,7 @@ def ml_strategy(data: List[Dict]) -> List[float]:
 
         ret = sum(weights[p] * apys[p] / 365 for p in PROTOCOLS)
         daily_returns.append(ret)
+
     return daily_returns
 
 
@@ -196,7 +298,7 @@ def main():
         "Ondo Only (Safe)": ondo_only_strategy(data),
         "Static Optimal": static_optimal_strategy(data),
         "Regime-Based": regime_strategy(data),
-        "ML Risk-Adjusted": ml_strategy(data),
+        "ML LSTM-Driven": ml_strategy(data),
     }
 
     results = []

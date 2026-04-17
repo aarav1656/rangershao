@@ -21,7 +21,7 @@ export const DRAWDOWN_THRESHOLDS: DrawdownThreshold[] = [
   { level: DrawdownLevel.CAUTION, pct: 0.01, action: 'Shift 15% from highest-risk to Ondo USDY' },
   { level: DrawdownLevel.WARNING, pct: 0.015, action: 'Shift 30% to Ondo USDY, pause new CLMM positions' },
   { level: DrawdownLevel.CRITICAL, pct: 0.02, action: 'Emergency exit all DeFi, 100% to Ondo USDY' },
-  { level: DrawdownLevel.CIRCUIT_BREAKER, pct: 0.03, action: 'Full vault pause, manual review required' },
+  { level: DrawdownLevel.CIRCUIT_BREAKER, pct: 0.025, action: 'Full vault pause, manual review required' },
 ];
 
 export interface DrawdownStatus {
@@ -166,7 +166,7 @@ export class DrawdownTracker {
       case DrawdownLevel.CIRCUIT_BREAKER:
         action = { level, action: 'full_pause' };
         this.circuitBreaker.emergencyPause(
-          `Drawdown circuit breaker: ${(drawdownPct * 100).toFixed(2)}% exceeds 3% threshold`
+          `Drawdown circuit breaker: ${(drawdownPct * 100).toFixed(2)}% exceeds 2.5% threshold`
         );
         this.alertManager.sendAlert({
           type: AlertType.CIRCUIT_BREAKER_TRIP,

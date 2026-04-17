@@ -10,6 +10,7 @@ import { AllocationEngine } from "./allocation-engine";
 import { RebalanceEngine } from "./rebalance-engine";
 import { TransactionBuilder } from "./transaction-builder";
 import { TransactionExecutor } from "./executor";
+import { CircuitBreaker } from "../../../security/circuit-breaker/circuit-breaker";
 
 export class KeeperLoop {
   private readonly config: KeeperConfig;
@@ -23,13 +24,15 @@ export class KeeperLoop {
   private readonly previousApys: Map<string, number>;
   private isRunning: boolean;
   private intervalHandle: ReturnType<typeof setInterval> | null;
+  private readonly circuitBreaker: CircuitBreaker | null;
 
-  constructor(config: KeeperConfig, signer: TransactionSigner) {
+  constructor(config: KeeperConfig, signer: TransactionSigner, circuitBreaker?: CircuitBreaker) {
     this.config = config;
     this.signer = signer;
     this.isRunning = false;
     this.intervalHandle = null;
     this.previousApys = new Map();
+    this.circuitBreaker = circuitBreaker ?? null;
 
     this.connection = new Connection(config.heliusRpcUrl, {
       commitment: "confirmed",
@@ -149,6 +152,30 @@ export class KeeperLoop {
         `Rebalance plan: ${plan.withdrawals.length} withdrawals, ${plan.deposits.length} deposits, total drift ${plan.totalDriftPct.toFixed(2)}%`
       );
 
+      // Step 6.5: Circuit breaker gate
+      if (this.circuitBreaker) {
+        const totalAmountUsd = plan.withdrawals.reduce((sum, w) => sum + w.amountUsdc, 0) +
+          plan.deposits.reduce((sum, d) => sum + d.amountUsdc, 0);
+        const check = this.circuitBreaker.checkCanExecute({
+          amountUsd: totalAmountUsd,
+          healthFactor: 1.0, // TODO: fetch real health factor from protocol data
+          isRebalance: true,
+        });
+
+        if (!check.allowed) {
+          this.log(`Circuit breaker BLOCKED rebalance: ${check.reason}`);
+          if (check.warnings.length > 0) {
+            this.log(`Circuit breaker warnings: ${check.warnings.join(', ')}`);
+          }
+          this.updatePreviousApys(currentApys);
+          return;
+        }
+
+        if (check.warnings.length > 0) {
+          this.log(`Circuit breaker warnings: ${check.warnings.join(', ')}`);
+        }
+      }
+
       // Step 7: Build transactions
       const feePayer = new PublicKey(this.config.vaultPubkey);
       const unsignedTxs =
@@ -179,6 +206,13 @@ export class KeeperLoop {
         } else {
           this.logError(`  FAIL ${result.id}: ${result.error}`);
         }
+      }
+
+      // Record transaction in circuit breaker
+      if (this.circuitBreaker && executionResult.successCount > 0) {
+        const totalAmountUsd = plan.withdrawals.reduce((sum, w) => sum + w.amountUsdc, 0) +
+          plan.deposits.reduce((sum, d) => sum + d.amountUsdc, 0);
+        this.circuitBreaker.recordTransaction(totalAmountUsd, true);
       }
 
       // Step 9: Update previous APYs

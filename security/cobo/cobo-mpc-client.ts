@@ -1,9 +1,5 @@
 import { SecurityConfig } from "../config/security-config";
-
-interface CoboApiClient {
-  setEnv(env: { DEV: string; PROD: string }): void;
-  setPrivateKey(key: string): void;
-}
+import { CoboDirectClient } from "./cobo-direct-client";
 
 interface CoboTransferParams {
   requestId: string;
@@ -36,8 +32,7 @@ interface CoboBalanceInfo {
 
 export class CoboMpcClient {
   private config: SecurityConfig["cobo"];
-  private apiClient: any;
-  private walletsApi: any;
+  private directClient?: CoboDirectClient;
   private transactionsApi: any;
   private initialized = false;
 
@@ -46,32 +41,23 @@ export class CoboMpcClient {
   }
 
   async initialize(): Promise<void> {
-    const CoboWaas2 = await import("@cobo/cobo-waas2");
-
-    this.apiClient = CoboWaas2.ApiClient.instance;
-
-    if (this.config.env === "dev") {
-      this.apiClient.setEnv(CoboWaas2.Env.DEV);
-    } else {
-      this.apiClient.setEnv(CoboWaas2.Env.PROD);
-    }
-
-    this.apiClient.setPrivateKey(this.config.apiSecret);
-
-    this.walletsApi = new CoboWaas2.WalletsApi();
-    this.transactionsApi = new CoboWaas2.TransactionsApi();
+    this.directClient = new CoboDirectClient({
+      apiSecret: this.config.apiSecret,
+      apiPubKey: process.env.COBO_API_PUBKEY,
+      env: this.config.env,
+    });
     this.initialized = true;
   }
 
   private ensureInitialized(): void {
-    if (!this.initialized) {
+    if (!this.initialized || !this.directClient) {
       throw new Error("CoboMpcClient not initialized. Call initialize() first.");
     }
   }
 
   async getWalletInfo(): Promise<CoboWalletInfo> {
     this.ensureInitialized();
-    const wallet = await this.walletsApi.getWalletById(this.config.walletId);
+    const wallet = await this.directClient!.getWallet(this.config.walletId);
     return {
       walletId: wallet.wallet_id,
       name: wallet.name,
@@ -85,9 +71,7 @@ export class CoboMpcClient {
 
   async getBalances(): Promise<CoboBalanceInfo[]> {
     this.ensureInitialized();
-    const result = await this.walletsApi.listTokenBalancesForWallet(
-      this.config.walletId
-    );
+    const result = await this.directClient!.getBalance(this.config.walletId);
     return (result.data || []).map((b: any) => ({
       tokenId: b.token_id,
       balance: b.balance?.total || "0",
@@ -100,27 +84,22 @@ export class CoboMpcClient {
     params: CoboTransferParams
   ): Promise<CoboTransactionResult> {
     this.ensureInitialized();
-
-    const CoboWaas2 = await import("@cobo/cobo-waas2");
-
-    const transferParams = new CoboWaas2.TransferParams();
-    transferParams.request_id = params.requestId;
-    transferParams.source = {
-      source_type: "Org-Controlled",
-      wallet_id: params.sourceWalletId,
-    };
-    transferParams.token_id = params.tokenId;
-    transferParams.destination = {
-      destination_type: "Address",
-      account_output: {
-        address: params.destinationAddress,
-        amount: params.amount,
-        memo: params.memo,
+    const result = await this.directClient!.createTransaction({
+      request_id: params.requestId,
+      source: {
+        source_type: "Org-Controlled",
+        wallet_id: params.sourceWalletId,
       },
-    };
-
-    const result =
-      await this.transactionsApi.createTransferTransaction(transferParams);
+      token_id: params.tokenId,
+      destination: {
+        destination_type: "Address",
+        account_output: {
+          address: params.destinationAddress,
+          amount: params.amount,
+          memo: params.memo,
+        },
+      },
+    });
 
     return {
       transactionId: result.transaction_id,
@@ -131,8 +110,7 @@ export class CoboMpcClient {
 
   async getTransactionStatus(transactionId: string): Promise<string> {
     this.ensureInitialized();
-    const result =
-      await this.transactionsApi.getTransactionById(transactionId);
+    const result = await this.directClient!.getTransaction(transactionId);
     return result.status;
   }
 
@@ -140,6 +118,20 @@ export class CoboMpcClient {
     limit: number = 20
   ): Promise<CoboTransactionResult[]> {
     this.ensureInitialized();
+    if (!this.transactionsApi) {
+      const CoboWaas2 = await import("@cobo/cobo-waas2");
+      const apiClient = CoboWaas2.ApiClient.instance;
+
+      if (this.config.env === "dev") {
+        apiClient.setEnv(CoboWaas2.Env.DEV);
+      } else {
+        apiClient.setEnv(CoboWaas2.Env.PROD);
+      }
+
+      apiClient.setPrivateKey(this.config.apiSecret);
+      this.transactionsApi = new CoboWaas2.TransactionsApi();
+    }
+
     const result = await this.transactionsApi.listTransactions({
       wallet_id: this.config.walletId,
       limit,
@@ -155,7 +147,7 @@ export class CoboMpcClient {
 
   async createAddress(chainId: string): Promise<string> {
     this.ensureInitialized();
-    const result = await this.walletsApi.createAddress(this.config.walletId, {
+    const result = await this.directClient!.createAddress(this.config.walletId, {
       chain_id: chainId,
       count: 1,
     });
