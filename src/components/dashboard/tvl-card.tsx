@@ -1,7 +1,13 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Users, Clock } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Clock,
+  ExternalLink,
+} from "lucide-react";
 
 interface TvlCardProps {
   tvl: number;
@@ -39,9 +45,20 @@ export function TvlCard({
       <Card className="glow-emerald border-primary/20 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
         <CardContent className="pt-6 relative">
-          <p className="text-sm font-medium text-muted-foreground">
-            Total Value Locked
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Total Value Locked
+            </p>
+            <a
+              href="https://solscan.io/account/7kQJhMKoGCGESbWjtaStqBi5YHzY8w6kTwLfoBqBDuhk"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Solscan
+            </a>
+          </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-bold tracking-tight">
               {formatUsd(tvl)}

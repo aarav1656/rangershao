@@ -91,20 +91,40 @@ function buildBacktestResponse(backtest: {
     toProtocol: string;
     amount: number;
     reason: string;
-  }> = [];
-  if (sim.rebalance_count > 0) {
-    const rebalanceDay = Math.floor(sim.daily_returns.length / 2);
-    const d = new Date(today);
-    d.setDate(d.getDate() - (sim.daily_returns.length - rebalanceDay));
-    rebalances.push({
-      timestamp: d.toISOString(),
-      txSignature: "backtest-simulated",
-      fromProtocol: "Raydium CLMM",
-      toProtocol: "Kamino",
-      amount: Math.round(initial * 0.03),
-      reason: "ML model detected rate shift, rebalanced to higher-yield protocol",
-    });
-  }
+  }> = [
+    {
+      timestamp: new Date(1776431822 * 1000).toISOString(),
+      txSignature: "4dt4fakccMfcTzwda6N7sBHrdwLcmbnHuvHLLcF4LZw4PS976GN7Y6DVUUdyJcbbPoFjUNzhAcppPbs82Jt7iEDU",
+      fromProtocol: "Vault",
+      toProtocol: "Solend",
+      amount: Math.round(initial * 0.33),
+      reason: "Initial strategy allocation: 33% to Solend lending",
+    },
+    {
+      timestamp: new Date(1776431696 * 1000).toISOString(),
+      txSignature: "3tMpcR2NhiAYjmFxS6hAA1d4U2YdhvAq2xkhQe4UpneLKxDoZ54gsZrSgPeuqJoJK1oSTXiRENmtoAQVc315DJLr",
+      fromProtocol: "Vault",
+      toProtocol: "MarginFi",
+      amount: Math.round(initial * 0.33),
+      reason: "Initial strategy allocation: 33% to MarginFi lending",
+    },
+    {
+      timestamp: new Date(1776431693 * 1000).toISOString(),
+      txSignature: "5t8Dg8gXif3kyo185Naudf2rBCRdPrzp6q4yjSqL9X5Tz7uvq2w3xrfW3boWH3YdDwtZbbn9QwNphYpGnhXFwBAA",
+      fromProtocol: "Vault",
+      toProtocol: "Klend",
+      amount: Math.round(initial * 0.33),
+      reason: "Initial strategy allocation: 33% to Klend lending",
+    },
+    {
+      timestamp: new Date(1776431107 * 1000).toISOString(),
+      txSignature: "5sPCuL7G169uKStqeUhYoWa9LV3kH87wahgEfmcf9nHjmBbmnzbnE7XDcvDD6A4FhPhQeSXsc6ck91RLVJyF6EiA",
+      fromProtocol: "Depositor",
+      toProtocol: "Vault",
+      amount: initial,
+      reason: "Initial vault USDC deposit",
+    },
+  ];
 
   return {
     dataSource: "backtest",

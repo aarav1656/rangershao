@@ -2,7 +2,7 @@
 
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { Shield } from "lucide-react";
+import { ExternalLink, Shield } from "lucide-react";
 
 export function DashboardHeader() {
   const { connected } = useWallet();
@@ -46,6 +46,15 @@ export function DashboardHeader() {
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             History
+          </a>
+          <a
+            href="https://solscan.io/account/7kQJhMKoGCGESbWjtaStqBi5YHzY8w6kTwLfoBqBDuhk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Vault
+            <ExternalLink className="h-3 w-3" />
           </a>
         </nav>
 

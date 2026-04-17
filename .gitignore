@@ -52,3 +52,6 @@ __pycache__/
 *.tsbuildinfo
 next-env.d.ts
 .gstack/
+
+docs/QA_PREP.md
+docs/PITCH_SCRIPT.md

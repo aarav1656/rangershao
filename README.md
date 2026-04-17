@@ -1,10 +1,14 @@
-# Ranger: Secure Hybrid Alpha Optimizer
+# Ranger SHAO: Secure Hybrid Alpha Optimizer
 
 Institutional-grade USDC vault on Solana combining RWA base yield with ML-optimized DeFi allocation, secured by Cobo MPC.
 
 **Target:** 15-20% APY on USDC | **Max Drawdown:** <2% | **Security:** Cobo MPC multi-party signing
 
 Built for the [Ranger Build-a-Bear Hackathon](https://earn.superteam.fun/listing/build-a-bear-hackathon/) on Voltr vaults.
+
+**Live Dashboard:** [ranger-shao.vercel.app](https://ranger-shao.vercel.app) | 
+
+**Vault on Solscan:** [7kQJhMKoGCGESbWjtaStqBi5YHzY8w6kTwLfoBqBDuhk](https://solscan.io/account/7kQJhMKoGCGESbWjtaStqBi5YHzY8w6kTwLfoBqBDuhk)
 
 ## Strategy
 
@@ -29,15 +33,15 @@ An ML model (PyTorch time-series) predicts optimal allocation weights across pro
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Dashboard (Next.js)                    │
+│                    Dashboard (Next.js)                  │
 │  TVL · APY · PnL Chart · Allocations · Rebalance Log    │
-│  Wallet Connect (Phantom) · Risk Metrics · Strategy Info │
+│  Wallet Connect (Phantom) · Risk Metrics · Strategy Info│
 └──────────────────────┬──────────────────────────────────┘
                        │ API
 ┌──────────────────────▼──────────────────────────────────┐
-│                   Keeper Bot (TypeScript)                 │
+│                   Keeper Bot (TypeScript)               │
 │  Data Fetch → ML Inference → Allocation → Rebalance Tx  │
-│  30-min cron · Greedy fallback · Circuit breakers        │
+│  30-min cron · Greedy fallback · Circuit breakers       │
 └──────┬───────────────┬──────────────────┬───────────────┘
        │               │                  │
   ┌────▼────┐   ┌──────▼──────┐   ┌──────▼──────┐
@@ -45,13 +49,13 @@ An ML model (PyTorch time-series) predicts optimal allocation weights across pro
   │ PyTorch │   │  Signing    │   │  Vault Ops  │
   └─────────┘   └─────────────┘   └──────┬──────┘
                                          │
-                    ┌────────────────────┬┴────────────────┐
-                    │                    │                  │
-             ┌──────▼──────┐   ┌────────▼────┐   ┌───────▼───────┐
+                    ┌────────────────────┴────────────────┐
+                    │                    │                │
+             ┌──────▼─────-─┐   ┌────────▼────┐   ┌───────▼───────┐
              │   Lending    │   │  Trustful   │   │   Raydium     │
              │   Adaptor    │   │  Adaptor    │   │   Adaptor     │
              │ Kamino/Mfi/  │   │ Ondo USDY   │   │  CLMM Pools   │
-             │ Jupiter Lend │   │ (RWA)       │   │  Stable Pairs  │
+             │ Jupiter Lend │   │ (RWA)       │   │  Stable Pairs │
              └──────────────┘   └─────────────┘   └───────────────┘
 ```
 
@@ -184,7 +188,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full deployment flow an
 
 ## Team
 
-Built by the Ranger team for the Build-a-Bear Hackathon (April 2026).
+Built by Kamal for the Build-a-Bear Hackathon 
 
 ## License
 
