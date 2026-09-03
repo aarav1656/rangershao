@@ -4,7 +4,7 @@ Last updated: 2026-04-16
 
 ## TL;DR
 
-The Ranger codebase is production-ready at the code layer: TypeScript compiles clean across contracts, keeper, security, ML, and frontend; all 22+ commits are pushed to `github.com/kamalbuilds/ranger`; backtests deliver 14-15% APY on paper.
+The Ranger codebase is production-ready at the code layer: TypeScript compiles clean across contracts, keeper, security, ML, and frontend; all 22+ commits are pushed to `github.com/aarav1656/ranger`; backtests deliver 14-15% APY on paper.
 
 Two external dependencies block a fully live end-to-end demo on a public test network:
 

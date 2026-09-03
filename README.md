@@ -188,7 +188,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full deployment flow an
 
 ## Team
 
-Built by Kamal for the Build-a-Bear Hackathon 
+Built by Aarav for the Build-a-Bear Hackathon 
 
 ## License
 
